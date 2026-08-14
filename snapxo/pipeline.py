@@ -1,10 +1,10 @@
 import shutil
 import tempfile
-import zipfile
 from pathlib import Path
 
 from rich.console import Console
 
+from .archive import GIB, SPACE_MARGIN, free_space, looks_like_zip_bomb, safe_extract, zip_payload
 from .checkpoint import Checkpoint, config_fingerprint
 from .cleanup import cleanup_tmp_files
 from .config import Config
@@ -49,6 +49,31 @@ def _check_external_tools(config: Config, ff: FFmpeg) -> None:
         require_ffmpeg(ff)
     if config.wants_pdf() and not config.dry_run:
         require_playwright()
+
+
+def _check_zip_sizes(zips: list[Path], config: Config) -> None:
+    # Runs before extraction, where refusing still costs nothing.
+    total_uncompressed = 0
+    for z in zips:
+        uncompressed, compressed = zip_payload(z)
+        total_uncompressed += uncompressed
+        if looks_like_zip_bomb(uncompressed, compressed):
+            ratio = uncompressed / compressed if compressed else 0
+            console.print(f"[red]{z.name} unpacks to {uncompressed / GIB:.1f} GB from "
+                          f"{compressed / GIB:.2f} GB ({ratio:.0f}x).[/red]")
+            console.print("[red]That is not what a Snapchat export looks like. Refusing to extract.[/red]")
+            raise SystemExit(1)
+
+    needed = int(total_uncompressed * SPACE_MARGIN)
+    targets = {Path(tempfile.gettempdir())}
+    if config.output:
+        targets.add(config.output)
+    for target in targets:
+        available = free_space(target)
+        if 0 <= available < needed:
+            console.print(f"[red]Not enough space on {target}: {available / GIB:.1f} GB free, "
+                          f"about {needed / GIB:.1f} GB needed.[/red]")
+            raise SystemExit(1)
 
 
 def _done_already(checkpoint, step: str) -> bool:
@@ -188,15 +213,24 @@ def run_pipeline(config: Config):
     if config.yes and not config.info:
         _check_external_tools(config, ff)
 
+    extract_problems: list[dict] = []
     if extracted_dir:
         export_dir = extracted_dir
     elif zips:
+        _check_zip_sizes(zips, config)
         export_dir = Path(tempfile.mkdtemp(prefix="snapexport_"))
         console.rule("[bold yellow]Step 4: Extract[/bold yellow]")
         for z in zips:
             console.print(f"Extracting {z.name}...")
-            with zipfile.ZipFile(z, "r") as zf:
-                zf.extractall(export_dir)
+            written, problems = safe_extract(z, export_dir, verbose=config.verbose)
+            extract_problems.extend(problems)
+            console.print(f"  Extracted {written} files")
+        if extract_problems:
+            console.print(f"[yellow]Skipped {len(extract_problems)} unsafe or unreadable entries:[/yellow]")
+            for p in extract_problems[:10]:
+                console.print(f"  [yellow]{p['entry']}: {p['reason']}[/yellow]")
+            if len(extract_problems) > 10:
+                console.print(f"  [yellow]... and {len(extract_problems) - 10} more[/yellow]")
     else:
         raise SystemExit(1)
 
