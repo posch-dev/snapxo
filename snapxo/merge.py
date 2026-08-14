@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from rich.console import Console
@@ -21,6 +22,7 @@ from .snapmap import generate_map_html
 from .stats import generate_stats_html
 from .thumbs import build_thumbnails
 from .utils import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS, extract_date_from_filename, file_hash
+from .verify import load_checksums, print_report, verify_folder, write_checksums, write_integrity
 
 console = Console()
 
@@ -70,6 +72,8 @@ def _collect_records(input_dir: Path) -> list[dict]:
             records.append({
                 "src": f,
                 "input": input_dir,
+                "rel": rel,
+                "integrity": meta.get("integrity"),
                 "subfolder": meta.get("subfolder") or subdir.name,
                 "date": meta.get("date") or extract_date_from_filename(f.name) or "unknown",
                 "type": meta.get("type") or ftype,
@@ -84,18 +88,28 @@ def _collect_records(input_dir: Path) -> list[dict]:
     return records
 
 
-def _deduplicate(records: list[dict]) -> tuple[list[dict], int, int]:
-    # Drop files whose content already appeared in an earlier input folder.
+def _deduplicate(
+    records: list[dict],
+    baselines: dict[Path, dict[str, str]] | None = None,
+) -> tuple[list[dict], int, int]:
+    # Drop files whose content already appeared in an earlier input folder. The hash
+    # is needed anyway, so comparing it to the folder's checksums costs nothing.
     seen: dict[str, dict] = {}
     unique = []
     dropped = 0
     freed = 0
+    baselines = baselines or {}
 
     with Progress(console=console) as progress:
         task = progress.add_task("Hashing files...", total=len(records))
         for rec in records:
             digest = file_hash(rec["src"])
             rec["hash"] = digest
+
+            known = baselines.get(rec["input"], {}).get(rec.get("rel", ""))
+            if known and known != digest and not rec.get("integrity"):
+                rec["integrity"] = {"reason": "changed content", "folder": rec["input"].name}
+
             if digest in seen:
                 dropped += 1
                 freed += rec["src"].stat().st_size
@@ -105,6 +119,70 @@ def _deduplicate(records: list[dict]) -> tuple[list[dict], int, int]:
             progress.advance(task)
 
     return unique, dropped, freed
+
+
+def _check_inputs(inputs: list[Path], verify: bool) -> tuple[dict[Path, list[str]], dict[Path, dict[str, str]]]:
+    # Returns the damaged files per folder and the checksums to compare against.
+    console.rule("[bold yellow]Verify[/bold yellow]")
+    damaged: dict[Path, list[str]] = {}
+    baselines: dict[Path, dict[str, str]] = {}
+    problems = 0
+
+    for input_dir in inputs:
+        report, _ = verify_folder(input_dir)
+        print_report(report)
+        damaged[input_dir] = list(report.wrong_size)
+        baselines[input_dir] = load_checksums(input_dir)
+        problems += report.problems
+        if not baselines[input_dir]:
+            console.print("  [dim]No checksums in this folder, only names and sizes were checked[/dim]")
+
+    if problems and verify:
+        console.print()
+        console.print(f"[red]{problems} files do not match their manifest. Nothing has been written.[/red]")
+        console.print("Options:")
+        console.print("  - copy the affected folder from its original again")
+        console.print("  - [cyan]--no-verify[/cyan] takes the damaged files along, marked as damaged")
+        console.print("  - [cyan]--no-verify --skip-damaged[/cyan] leaves them out")
+        raise SystemExit(1)
+
+    return damaged, baselines
+
+
+def _mark_damaged(records: list[dict], damaged: dict[Path, list[str]]) -> int:
+    marked = 0
+    for rec in records:
+        if rec.get("integrity"):
+            marked += 1
+            continue
+        if rec.get("rel") in damaged.get(rec["input"], []):
+            rec["integrity"] = {"reason": "wrong size", "folder": rec["input"].name}
+            marked += 1
+    return marked
+
+
+def _recover_damaged(records: list[dict]) -> tuple[list[dict], int]:
+    # A file damaged in one export may be intact in another, which is the whole
+    # point of merging. Keep the intact copy and drop the damaged twin.
+    by_identity: dict[str, list[dict]] = {}
+    for rec in records:
+        identity = rec.get("media_id") or rec.get("original_name") or ""
+        if identity:
+            by_identity.setdefault(identity, []).append(rec)
+
+    drop = set()
+    recovered = 0
+    for group in by_identity.values():
+        intact = [r for r in group if not r.get("integrity")]
+        broken = [r for r in group if r.get("integrity")]
+        if intact and broken:
+            for rec in broken:
+                drop.add(id(rec))
+                recovered += 1
+
+    if not drop:
+        return records, 0
+    return [r for r in records if id(r) not in drop], recovered
 
 
 def _renumber(records: list[dict], folder_structure: str) -> list[dict]:
@@ -328,9 +406,23 @@ def merge_outputs(
         console.print("[red]No media files found in the given folders.[/red]")
         return 0
 
+    damaged_by_folder, baselines = _check_inputs(inputs, verify)
+    _mark_damaged(records, damaged_by_folder)
+
     console.rule("[bold yellow]Deduplicate[/bold yellow]")
-    records, dropped, freed = _deduplicate(records)
+    records, dropped, freed = _deduplicate(records, baselines)
     console.print(f"Kept {len(records)} files, dropped {dropped} duplicates ({freed / (1024*1024):.1f} MB)")
+
+    records, recovered = _recover_damaged(records)
+    if recovered:
+        console.print(f"[green]Recovered {recovered} damaged files from another export[/green]")
+
+    still_damaged = [r for r in records if r.get("integrity")]
+    if still_damaged and skip_damaged:
+        records = [r for r in records if not r.get("integrity")]
+        console.print(f"[yellow]Left out {len(still_damaged)} damaged files (--skip-damaged)[/yellow]")
+    elif still_damaged:
+        console.print(f"[yellow]Taking {len(still_damaged)} damaged files along, marked as damaged[/yellow]")
 
     console.rule("[bold yellow]Renumber[/bold yellow]")
     records = _renumber(records, folder_structure)
@@ -377,7 +469,18 @@ def merge_outputs(
             "media_ids": rec["media_ids"],
             "size": rec["src"].stat().st_size,
             "dest": str(dest),
+            "integrity": rec.get("integrity"),
         })
+
+    if not dry_run:
+        rel_hashes = {f"{rec['target_folder']}/{rec['new_name']}": rec["hash"] for rec in records}
+        write_checksums(output, rel_hashes)
+        console.print(f"  Wrote checksums for {len(rel_hashes)} files")
+
+        marked = [{"rel": f"{rec['target_folder']}/{rec['new_name']}", **rec["integrity"]}
+                  for rec in records if rec.get("integrity")]
+        if write_integrity(output, marked, generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")):
+            console.print(f"  Recorded {len(marked)} damaged files in _meta/integrity.json")
 
     touched = apply_file_times(file_index, dry_run=dry_run)
     if touched:

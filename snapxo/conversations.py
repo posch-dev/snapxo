@@ -145,6 +145,13 @@ def _media_rel_path(entry: dict) -> str:
     return f"{subfolder}/{entry.get('new_name', '')}"
 
 
+def _damaged_note(entry: dict) -> str:
+    bad = entry.get("integrity")
+    if not isinstance(bad, dict) or not bad.get("reason"):
+        return ""
+    return f'<div class="damaged-note">This file arrived damaged ({html.escape(bad["reason"])})</div>'
+
+
 def _media_html(entry: dict, pdf_mode: bool = False) -> str:
     # Render one attachment. Conversations live in conversations/, so links go one
     # level up. PDFs get images embedded and video or audio as a link, since a PDF
@@ -153,23 +160,24 @@ def _media_html(entry: dict, pdf_mode: bool = False) -> str:
     href = html.escape(f"../{rel}")
     label = html.escape(rel)
     ftype = entry.get("type", "")
+    note = _damaged_note(entry)
 
     if ftype == "image":
         # Lazy loading is right for the browser but wrong for PDF: images below
         # the viewport would never load and end up missing from the document.
         lazy = "" if pdf_mode else ' loading="lazy"'
         return (f'<div class="msg-media"><a href="{href}" target="_blank">'
-                f'<img src="{href}"{lazy} alt="{label}"></a></div>')
+                f'<img src="{href}"{lazy} alt="{label}"></a>{note}</div>')
 
     if pdf_mode:
         icon = "&#127916;" if ftype == "video" else "&#127908;"
-        return f'<div class="msg-media-link">{icon} <a href="{href}">{label}</a></div>'
+        return f'<div class="msg-media-link">{icon} <a href="{href}">{label}</a>{note}</div>'
 
     if ftype == "video":
-        return f'<div class="msg-media"><video src="{href}" controls preload="metadata"></video></div>'
+        return f'<div class="msg-media"><video src="{href}" controls preload="metadata"></video>{note}</div>'
     if ftype == "audio":
-        return f'<div class="msg-media"><audio src="{href}" controls preload="metadata"></audio></div>'
-    return f'<div class="msg-media-link"><a href="{href}" target="_blank">{label}</a></div>'
+        return f'<div class="msg-media"><audio src="{href}" controls preload="metadata"></audio>{note}</div>'
+    return f'<div class="msg-media-link"><a href="{href}" target="_blank">{label}</a>{note}</div>'
 
 
 def _should_collapse(messages: list[dict], start: int) -> int:
@@ -324,6 +332,7 @@ hr {{ border: none; border-top: 1px solid; margin: 2px 0 6px; }}
 .ts {{ color: #888; font-size: 11px; margin-left: 8px; }}
 .ts-inline {{ color: inherit; font-size: inherit; }}
 .msg-media-link {{ margin: 6px 0; font-size: 13px; word-break: break-all; }}
+.damaged-note {{ color: #c9a227; font-size: 11px; margin-top: 2px; }}
 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }}
 .system-msg {{ text-align: center; color: #888; font-size: 13px; padding: 8px 0; font-style: italic; }}
 .media {{ color: #aaa; }}

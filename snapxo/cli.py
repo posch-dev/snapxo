@@ -2,11 +2,16 @@ from datetime import datetime
 from pathlib import Path
 
 import click
+from rich.console import Console
 
 from . import __version__
 from .config import Config
+from .doctor import run_doctor
 from .merge import merge_outputs
 from .pipeline import run_pipeline
+from .verify import print_report, verify_folder, write_checksums
+
+console = Console()
 
 
 class DefaultGroup(click.Group):
@@ -47,7 +52,9 @@ def _is_iso_date(value: str) -> bool:
 GROUP_EPILOG = """\
 Try:
 snapxo organize --help    all options for organizing an export
-snapxo merge --help       options for merging finished output folders\
+snapxo merge --help       options for merging finished output folders
+snapxo verify --help      check a finished folder against its manifest
+snapxo doctor             check whether ffmpeg and the PDF browser are there\
 """
 
 
@@ -109,6 +116,41 @@ def merge_command(folders, output, hardlink, delete_sources, yes, folder_structu
         skip_damaged=skip_damaged,
         dry_run=dry_run,
     )
+
+
+@main.command("verify")
+@click.argument("folders", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False))
+@click.option("--hash", "with_hash", is_flag=True,
+              help="Read every file and compare it to the stored checksums (slow)")
+@click.option("--update", is_flag=True, help="Write the current state as the new baseline")
+def verify_command(folders, with_hash, update):
+    """Check a finished output folder against its manifest.
+
+    Without --hash only existence and size are checked, which takes seconds and
+    already finds a half-copied or partly deleted folder. With --hash every file
+    is read and compared to _meta/checksums.json, which is what detects bit rot.
+    The first --hash run writes that baseline.
+    """
+    failed = False
+    for folder in folders:
+        path = Path(folder)
+        report, computed = verify_folder(path, hashes=with_hash)
+        print_report(report)
+
+        if computed and (update or not report.has_baseline):
+            if write_checksums(path, computed):
+                console.print(f"  Wrote checksums for {len(computed)} files")
+        failed = failed or not report.ok
+
+    if failed:
+        raise SystemExit(1)
+
+
+@main.command("doctor")
+def doctor_command():
+    """Check whether the external tools are in place."""
+    if not run_doctor():
+        raise SystemExit(1)
 
 
 @main.command("organize")

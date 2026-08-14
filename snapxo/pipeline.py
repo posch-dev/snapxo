@@ -39,6 +39,7 @@ from .scanner import scan_export
 from .snapmap import generate_map_html
 from .stats import generate_stats_html
 from .thumbs import build_thumbnails
+from .verify import verify_folder, write_checksums
 from .voice import convert_voice_messages, detect_voice_messages
 
 console = Console()
@@ -508,7 +509,13 @@ def run_pipeline(config: Config):
                 console.print("Copied raw metadata to _meta/")
             checkpoint.complete_step("meta")
 
-    console.rule("[bold yellow]Step 21: Cleanup[/bold yellow]")
+    if config.checksums and not config.dry_run and file_index:
+        console.rule("[bold yellow]Step 21: Checksums[/bold yellow]")
+        _, computed = verify_folder(output_dir, hashes=True)
+        if write_checksums(output_dir, computed):
+            console.print(f"Fingerprinted {len(computed)} files for later `snapxo verify` runs")
+
+    console.rule("[bold yellow]Step 22: Cleanup[/bold yellow]")
     removed = cleanup_tmp_files(output_dir, verbose=config.verbose)
     console.print(f"Cleaned {removed} tmp files")
 

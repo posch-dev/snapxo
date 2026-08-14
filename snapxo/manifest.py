@@ -48,6 +48,8 @@ def build_manifest(
             "media_ids": entry.get("media_ids") or ([entry["media_id"]] if entry.get("media_id") else []),
             "uuid": entry.get("uuid"),
             "size": entry.get("size"),
+            # Only set when the file arrived damaged, see verify.py
+            "integrity": entry.get("integrity"),
         })
 
     return {
@@ -120,6 +122,7 @@ def manifest_to_file_index(manifest: dict, output_dir: Path) -> list[dict]:
             "media_ids": entry.get("media_ids") or [],
             "size": entry.get("size"),
             "dest": str(dest),
+            "integrity": entry.get("integrity"),
         })
     return file_index
 

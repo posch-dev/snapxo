@@ -95,6 +95,10 @@ def build_file_details(file_index: list[dict], json_data: dict | None) -> dict[s
             "src": entry.get("source", ""),
         }
 
+        damaged = entry.get("integrity")
+        if isinstance(damaged, dict) and damaged.get("reason"):
+            item["bad"] = damaged["reason"]
+
         media_id = entry.get("media_id")
         if media_id and media_id in chat_info:
             ci = chat_info[media_id]
@@ -220,6 +224,7 @@ def _details_script() -> str:
             body += row("Location", mapLink + note);
         }
 
+        if (d.bad) body += row("Damaged", '<span class="detail-note">' + esc(d.bad) + " when it was merged in</span>");
         if (d.o && d.o !== d.n) body += row("Original name", '<span class="detail-mono">' + esc(d.o) + "</span>");
 
         var relFile = d.f + "/" + d.n;
@@ -358,10 +363,14 @@ def build_print_index(
                 if d.get("approx"):
                     coords += ' <span class="note">(approx.)</span>'
                 rows.append(("Location", coords))
+            if d.get("bad"):
+                rows.append(("Damaged", f'<span class="note">{html.escape(d["bad"])} when it was merged in</span>'))
             if d.get("o") and d.get("o") != d.get("n"):
                 rows.append(("Original", d["o"]))
 
-            dl = "".join(f"<dt>{k}</dt><dd>{v if k == 'Location' else html.escape(str(v))}</dd>" for k, v in rows)
+            # Location and Damaged already carry markup, the rest is plain text
+            raw = {"Location", "Damaged"}
+            dl = "".join(f"<dt>{k}</dt><dd>{v if k in raw else html.escape(str(v))}</dd>" for k, v in rows)
             parts.append(f'<div class="item"><div class="thumb-box">{box}</div>'
                          f'<div class="meta"><div class="name">{html.escape(d.get("n", ""))}</div>'
                          f'<dl>{dl}</dl></div></div>\n')
@@ -463,6 +472,7 @@ h2 { margin: 20px 0 10px; color: #FFFE00; border-bottom: 1px solid #333; padding
 .filters button:hover { background: #444; }
 .filters button.active { background: #FFFE00; color: #1a1a1a; border-color: #FFFE00; font-weight: 600; }
 .item.hidden { display: none; }
+.damaged-badge { background: #c9a227; color: #1a1a1a; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
 
 /* Details panel */
 #detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 2000; align-items: center; justify-content: center; padding: 20px; }
@@ -522,6 +532,8 @@ __DATE_CSS__
             info_bar = f'<div class="info">{date_html}{info_btn}</div>'
 
             preview = html.escape(thumbs[idx]) if idx in thumbs else None
+            if isinstance(f.get("integrity"), dict):
+                info_bar = f'<div class="info damaged">{date_html}<span class="damaged-badge">damaged</span>{info_btn}</div>'
 
             if ftype == "image":
                 page += (f'<div class="item" data-type="image">'
