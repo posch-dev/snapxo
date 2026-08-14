@@ -25,6 +25,8 @@ def test_group_help_lists_both_commands(runner):
     assert result.exit_code == 0
     assert "organize" in result.output
     assert "merge" in result.output
+    assert "verify" in result.output
+    assert "doctor" in result.output
 
 
 def test_the_epilog_is_flush_left(runner):
@@ -46,11 +48,50 @@ def test_organize_requires_an_output(runner, tmp_path: Path):
     assert "--output" in result.output
 
 
+def test_info_and_dry_run_need_no_output(runner, tmp_path: Path):
+    (tmp_path / "json").mkdir()
+    (tmp_path / "json" / "account.json").write_text("{}", encoding="utf-8")
+
+    for flag in ("--info", "--dry-run"):
+        result = runner.invoke(main, ["organize", str(tmp_path), flag])
+        assert "-o/--output is required" not in result.output, flag
+
+
 def test_merge_requires_an_output(runner, tmp_path: Path):
     result = runner.invoke(main, ["merge", str(tmp_path)])
 
     assert result.exit_code != 0
     assert "--output" in result.output
+
+
+def test_merge_dry_run_needs_no_output(runner, tmp_path: Path):
+    result = runner.invoke(main, ["merge", str(tmp_path), "--dry-run"])
+
+    assert "-o/--output is required" not in result.output
+
+
+def test_deleting_sources_cannot_skip_the_check(runner, tmp_path: Path):
+    result = runner.invoke(main, ["merge", str(tmp_path), str(tmp_path), "-o", str(tmp_path / "out"),
+                                  "--delete-sources", "--no-verify"])
+
+    assert result.exit_code != 0
+    assert "--delete-sources cannot be combined with --no-verify" in result.output
+
+
+def test_a_malformed_date_is_rejected(runner, tmp_path: Path):
+    (tmp_path / "json").mkdir()
+
+    result = runner.invoke(main, ["organize", str(tmp_path), "-o", str(tmp_path / "out"), "--since", "20.07.2026"])
+
+    assert result.exit_code != 0
+    assert "--since must be a date" in result.output
+
+
+def test_the_sticker_flags_are_gone(runner, tmp_path: Path):
+    for flag in ("--only-stickers", "--no-stickers"):
+        result = runner.invoke(main, ["organize", str(tmp_path), "-o", str(tmp_path / "out"), flag])
+        assert result.exit_code != 0
+        assert "No such option" in result.output
 
 
 def test_organize_requires_an_input(runner, tmp_path: Path):
@@ -103,8 +144,8 @@ def test_defaults_are_shown_rather_than_written_into_the_text(runner):
     assert "(default: 23" not in result.output
 
 
-def test_both_commands_describe_what_they_do(runner):
-    for command in ("organize", "merge"):
+def test_every_command_describes_what_it_does(runner):
+    for command in ("organize", "merge", "verify", "doctor"):
         result = runner.invoke(main, [command, "--help"])
         assert result.exit_code == 0
         assert "Usage:" in result.output
