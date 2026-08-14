@@ -159,6 +159,26 @@ class FFmpeg:
                 return False
         return False
 
+    def grab_frame(self, input_path: Path, output_path: Path, height: int = 320) -> bool:
+        # Seeks a second in, the opening frame of a Snapchat video is often black.
+        try:
+            cmd = [
+                self.ffmpeg, "-y", "-ss", "1",
+                "-i", str(input_path),
+                "-frames:v", "1",
+                "-vf", f"scale=-2:{height}:force_original_aspect_ratio=decrease",
+                str(output_path),
+            ]
+            result = _run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode == 0 and output_path.is_file() and output_path.stat().st_size > 0:
+                return True
+            # Video is shorter than the seek point.
+            cmd[cmd.index("-ss") + 1] = "0"
+            result = _run(cmd, capture_output=True, text=True, timeout=60)
+            return result.returncode == 0 and output_path.is_file() and output_path.stat().st_size > 0
+        except Exception:
+            return False
+
     def burn_overlay_image(self, main_path: Path, overlay_path: Path, output_path: Path) -> bool:
         try:
             result = _run(

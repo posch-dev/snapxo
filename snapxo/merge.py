@@ -13,11 +13,12 @@ from rich.console import Console
 from rich.progress import Progress
 
 from .conversations import generate_conversations
-from .indexer import generate_index_html
+from .indexer import generate_index_html, generate_index_pdf
 from .inspector import load_json_data
 from .manifest import build_media_id_map, load_manifest, write_manifest
 from .snapmap import generate_map_html
 from .stats import generate_stats_html
+from .thumbs import build_thumbnails
 from .utils import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS, extract_date_from_filename, file_hash
 
 console = Console()
@@ -431,7 +432,10 @@ def merge_outputs(
     else:
         console.print("[yellow]No JSON data available - skipping conversations, stats and map[/yellow]")
 
-    generate_index_html(file_index, output, json_data=json_data, dry_run=dry_run)
+    thumbs = build_thumbnails(file_index, output, dry_run=dry_run)
+    generate_index_html(file_index, output, json_data=json_data, dry_run=dry_run, thumbs=thumbs)
+    if index_format == "pdf":
+        generate_index_pdf(file_index, output, json_data=json_data, thumbs=thumbs, dry_run=dry_run)
 
     if delete_sources and not dry_run:
         console.rule("[bold yellow]Delete sources[/bold yellow]")

@@ -14,7 +14,7 @@ from .deps import require_ffmpeg, require_playwright
 from .encoder import encode_videos
 from .ffmpeg import FFmpeg
 from .fixtypes import fix_unknown_files
-from .indexer import generate_index_html
+from .indexer import generate_index_html, generate_index_pdf
 from .inspector import (
     count_json_stats,
     display_summary,
@@ -38,6 +38,7 @@ from .pdf import render_single
 from .scanner import scan_export
 from .snapmap import generate_map_html
 from .stats import generate_stats_html
+from .thumbs import build_thumbnails
 from .voice import convert_voice_messages, detect_voice_messages
 
 console = Console()
@@ -464,7 +465,13 @@ def run_pipeline(config: Config):
     if config.should_index() and file_index:
         console.rule("[bold yellow]Step 19: Index[/bold yellow]")
         if not _done_already(checkpoint, "index"):
-            generate_index_html(file_index, output_dir, json_data=json_data, dry_run=config.dry_run)
+            thumbs = build_thumbnails(file_index, output_dir, ff=ff if ff.check() else None,
+                                      dry_run=config.dry_run, verbose=config.verbose)
+            generate_index_html(file_index, output_dir, json_data=json_data,
+                                dry_run=config.dry_run, thumbs=thumbs)
+            if config.index_format == "pdf":
+                generate_index_pdf(file_index, output_dir, json_data=json_data,
+                                   thumbs=thumbs, dry_run=config.dry_run)
             checkpoint.complete_step("index")
 
     if config.should_process_meta():

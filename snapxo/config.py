@@ -107,8 +107,7 @@ class Config:
         return "pdf" in (self.conversation_format, self.index_format, self.stats_format)
 
     def in_date_range(self, date: str | None) -> bool:
-        # `date` is the "YYYY-MM-DD" prefix used everywhere in the file index. Anything
-        # without a usable date is kept, dropping it would hide files over a typo.
+        # Undated entries are kept, dropping them would hide files over a typo.
         if not self.since and not self.until:
             return True
         if not date or len(date) < 10:

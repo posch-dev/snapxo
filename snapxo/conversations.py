@@ -105,8 +105,7 @@ def _parse_conversations(json_data: dict, own_username: str | None = None) -> di
 
 
 def _filter_by_date(conversations: dict[str, list[dict]], since: str | None, until: str | None) -> dict[str, list[dict]]:
-    # Timestamps look like "2026-07-20 14:32:05 UTC", both bounds are inclusive.
-    # Messages without a usable timestamp stay, so a chat never loses content silently.
+    # Timestamps read "2026-07-20 14:32:05 UTC", both bounds inclusive.
     filtered = {}
     for contact, messages in conversations.items():
         kept = []

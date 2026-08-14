@@ -272,14 +272,148 @@ def _details_script() -> str:
 """
 
 
+PRINT_CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #fff; color: #1a1a1a; font-size: 10pt; }
+h1 { font-size: 20pt; margin-bottom: 4mm; }
+h2 { font-size: 14pt; margin: 0 0 3mm; padding-bottom: 1.5mm; border-bottom: 1pt solid #999; }
+.summary { color: #555; margin-bottom: 6mm; }
+.year { break-before: page; }
+.year:first-of-type { break-before: avoid; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+.item { break-inside: avoid; border: 0.5pt solid #ccc; border-radius: 2mm; overflow: hidden; }
+.thumb-box { height: 40mm; background: #f0f0f0; display: flex; align-items: center; justify-content: center; }
+.thumb-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.placeholder { color: #888; font-size: 9pt; text-align: center; padding: 2mm; }
+.meta { padding: 2mm 2.5mm; }
+.meta .name { font-weight: 600; font-size: 8.5pt; word-break: break-all; margin-bottom: 1mm; }
+.meta dl { display: grid; grid-template-columns: 16mm 1fr; gap: 0.4mm 1.5mm; font-size: 7.5pt; }
+.meta dt { color: #777; }
+.meta dd { color: #222; word-break: break-word; }
+.note { color: #8a6d00; }
+@page { size: A4; margin: 12mm 10mm; }
+"""
+
+
+def _format_size(size) -> str:
+    if not isinstance(size, int):
+        return "unknown"
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 ** 2:
+        return f"{size / 1024:.1f} KB"
+    if size < 1024 ** 3:
+        return f"{size / 1024 ** 2:.1f} MB"
+    return f"{size / 1024 ** 3:.2f} GB"
+
+
+def build_print_index(
+    file_index: list[dict],
+    details: dict[str, dict],
+    thumbs: dict[int, str] | None = None,
+) -> str:
+    # Print variant: no scripts, and never lazy, or the PDF comes out without images.
+    thumbs = thumbs or {}
+
+    by_year: dict[str, list[tuple[int, dict]]] = defaultdict(list)
+    for i, f in enumerate(file_index):
+        by_year[f.get("subfolder", f.get("year", "unknown"))].append((i, f))
+
+    n_vid = sum(1 for f in file_index if f.get("type") == "video")
+    n_img = sum(1 for f in file_index if f.get("type") == "image")
+    n_aud = sum(1 for f in file_index if f.get("type") == "audio")
+
+    parts = ['<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
+             '<title>Snapchat Memories</title>\n<style>' + PRINT_CSS + '</style>\n</head>\n<body>\n']
+    parts.append('<h1>Snapchat Memories</h1>\n')
+    parts.append(f'<div class="summary">{len(file_index)} files, {n_img} images, '
+                 f'{n_vid} videos, {n_aud} voice messages</div>\n')
+
+    type_labels = {"image": "Image", "video": "Video", "audio": "Voice message"}
+    source_labels = {"memory": "Memory", "chat": "Chat media"}
+
+    for year in sorted(by_year.keys(), reverse=True):
+        items = by_year[year]
+        parts.append(f'<section class="year"><h2>{html.escape(year)} ({len(items)} files)</h2>\n<div class="grid">\n')
+
+        for idx, f in sorted(items, key=lambda x: x[1].get("date", "")):
+            d = details.get(f"f{idx}", {})
+            ftype = f.get("type", "")
+
+            if idx in thumbs:
+                box = f'<img src="{html.escape(thumbs[idx])}" alt="">'
+            else:
+                label = {"audio": "Voice message", "video": "Video"}.get(ftype, "No preview")
+                box = f'<div class="placeholder">{label}</div>'
+
+            rows = [("Date", _date_text(d)), ("Type", type_labels.get(ftype, ftype or "File")),
+                    ("Source", source_labels.get(d.get("src", ""), d.get("src", "") or "unknown")),
+                    ("Size", _format_size(d.get("s")))]
+            if d.get("from"):
+                rows.append(("Sender", d["from"]))
+            if d.get("chat"):
+                rows.append(("Chat", d["chat"]))
+            if d.get("lat") is not None:
+                coords = f'{d["lat"]}, {d["lon"]}'
+                if d.get("approx"):
+                    coords += ' <span class="note">(approx.)</span>'
+                rows.append(("Location", coords))
+            if d.get("o") and d.get("o") != d.get("n"):
+                rows.append(("Original", d["o"]))
+
+            dl = "".join(f"<dt>{k}</dt><dd>{v if k == 'Location' else html.escape(str(v))}</dd>" for k, v in rows)
+            parts.append(f'<div class="item"><div class="thumb-box">{box}</div>'
+                         f'<div class="meta"><div class="name">{html.escape(d.get("n", ""))}</div>'
+                         f'<dl>{dl}</dl></div></div>\n')
+
+        parts.append('</div></section>\n')
+
+    parts.append('</body></html>')
+    return "".join(parts)
+
+
+def _date_text(d: dict) -> str:
+    date = d.get("d", "")
+    time = d.get("tm")
+    return f"{date} {time}" if time else date or "unknown"
+
+
+def generate_index_pdf(
+    file_index: list[dict],
+    output_dir: Path,
+    json_data: dict | None = None,
+    thumbs: dict[int, str] | None = None,
+    dry_run: bool = False,
+) -> bool:
+    if dry_run:
+        return True
+
+    from .pdf import render_single
+
+    details = build_file_details(file_index, json_data)
+    page = build_print_index(file_index, details, thumbs)
+
+    # Must sit in the output root, the media paths are relative to it.
+    source = output_dir / "index_print.tmp.html"
+    source.write_text(page, encoding="utf-8")
+    try:
+        ok = render_single(source, output_dir / "index.pdf")
+    finally:
+        source.unlink(missing_ok=True)
+    return ok
+
+
 def generate_index_html(
     file_index: list[dict],
     output_dir: Path,
     json_data: dict | None = None,
     dry_run: bool = False,
+    thumbs: dict[int, str] | None = None,
 ) -> bool:
     if dry_run:
         return True
+
+    thumbs = thumbs or {}
 
     by_year: dict[str, list[tuple[int, dict]]] = defaultdict(list)
     for i, f in enumerate(file_index):
@@ -383,14 +517,18 @@ __DATE_CSS__
             info_btn = f'<button class="info-btn" data-id="f{idx}" title="Details">&#8505;</button>'
             info_bar = f'<div class="info">{date_html}{info_btn}</div>'
 
+            preview = html.escape(thumbs[idx]) if idx in thumbs else None
+
             if ftype == "image":
                 page += (f'<div class="item" data-type="image">'
-                         f'<a href="{filepath}"><img class="thumb" src="{filepath}" loading="lazy" alt=""></a>'
+                         f'<a href="{filepath}"><img class="thumb" src="{preview or filepath}" loading="lazy" alt=""></a>'
                          f'{info_bar}</div>\n')
             elif ftype == "video":
+                media = (f'<img class="thumb" src="{preview}" loading="lazy" alt="">' if preview
+                         else f'<video class="thumb" src="{filepath}" preload="metadata"></video>')
                 page += (f'<div class="item" data-type="video">'
                          f'<a href="{filepath}"><span class="type-badge video-icon">Video</span>'
-                         f'<video class="thumb" src="{filepath}" preload="metadata"></video></a>'
+                         f'{media}</a>'
                          f'{info_bar}</div>\n')
             elif ftype == "audio":
                 page += (f'<div class="item" data-type="audio">'

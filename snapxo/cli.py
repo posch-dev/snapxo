@@ -31,8 +31,7 @@ class DefaultGroup(click.Group):
 
 
 def _require_output(output, optional: bool) -> None:
-    # -o is only needed when something actually gets written, so --info and --dry-run
-    # work without naming a folder that is never created.
+    # Only needed when something is actually written.
     if not output and not optional:
         raise click.UsageError("-o/--output is required, except with --info or --dry-run")
 
@@ -90,8 +89,7 @@ def merge_command(folders, output, hardlink, delete_sources, yes, folder_structu
     """
     _require_output(output, dry_run)
     if delete_sources and not verify:
-        # Deleting the originals is the one case where an unchecked input can lose data
-        # for good, so this combination is refused instead of quietly overridden.
+        # Unchecked inputs plus deleted originals is the one way to lose data for good.
         raise click.UsageError("--delete-sources cannot be combined with --no-verify")
     if skip_damaged and verify:
         raise click.UsageError("--skip-damaged only applies together with --no-verify")

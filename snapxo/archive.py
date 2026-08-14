@@ -1,5 +1,4 @@
-# Everything that happens to a ZIP before its contents can be trusted: size checks
-# up front, then an extraction that refuses to write outside the target directory.
+# ZIP checks and extraction that cannot write outside the target directory.
 
 import shutil
 import stat
@@ -8,14 +7,12 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 GIB = 1024 ** 3
 
-# A Snapchat export is almost entirely media that is already compressed, so its
-# ratio sits around 1. Both limits have to be exceeded before a ZIP is refused,
-# which keeps a small but highly compressible archive out of the trap.
+# A real export is already compressed media and sits near 1x. Both limits must be
+# exceeded, so a small but very compressible archive is never refused.
 MAX_RATIO = 50
 RATIO_MIN_UNCOMPRESSED = 1 * GIB
 
-# Extraction needs the full payload, plus room for the output that follows.
-SPACE_MARGIN = 1.1
+SPACE_MARGIN = 1.1  # headroom over the unpacked payload
 
 
 def zip_payload(zip_path: Path) -> tuple[int, int]:
@@ -49,9 +46,8 @@ def free_space(path: Path) -> int:
 
 
 def _is_unsafe_name(name: str) -> str | None:
-    # Returns the reason the entry is refused, or None if it is fine. Checked against
-    # both path flavours because a ZIP written on Windows can carry "C:\" or "\" and
-    # PurePosixPath would read those as an ordinary file name.
+    # Returns the reason for refusing, or None. Both path flavours, because a
+    # Windows-written ZIP can carry `C:\` that PurePosixPath reads as a file name.
     if not name or name in (".", ".."):
         return "empty name"
     if name.startswith("/") or name.startswith("\\"):
@@ -65,15 +61,12 @@ def _is_unsafe_name(name: str) -> str | None:
 
 
 def _is_symlink(info: zipfile.ZipInfo) -> bool:
-    # Unix mode lives in the upper 16 bits of external_attr, and only for archives
-    # written on Unix. A symlink could point anywhere, so it is never followed.
+    # Unix mode sits in the upper 16 bits of external_attr.
     return stat.S_ISLNK(info.external_attr >> 16)
 
 
 def safe_extract(zip_path: Path, dest: Path, verbose: bool = False) -> tuple[int, list[dict]]:
-    # Extracts into `dest` and returns (files written, problems). Entries that would
-    # land outside `dest` are refused, and an entry with a broken CRC costs that one
-    # file instead of the whole run.
+    # Returns (files written, problems). A broken entry costs that file, not the run.
     dest_root = dest.resolve()
     written = 0
     problems: list[dict] = []
