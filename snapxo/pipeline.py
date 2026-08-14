@@ -47,7 +47,7 @@ def _check_external_tools(config: Config, ff: FFmpeg) -> None:
     # Fail early, with install instructions, if a needed external tool is absent.
     if config.should_encode():
         require_ffmpeg(ff)
-    if config.conversation_format == "pdf" and not config.dry_run:
+    if config.wants_pdf() and not config.dry_run:
         require_playwright()
 
 
@@ -77,7 +77,6 @@ CATEGORIES = [
     ("conversations", "Generate conversations"),
     ("stats",         "Generate stats HTML"),
     ("map",           "Generate Snap Map"),
-    ("stickers",      "Export stickers"),
     ("index",         "Generate media gallery HTML"),
     ("meta",          "Copy raw metadata"),
 ]
@@ -125,8 +124,6 @@ def _interactive_select(config: Config, console: Console):
         config.no_stats = True
     if "map" not in selected_keys:
         config.no_map = True
-    if "stickers" not in selected_keys:
-        config.no_stickers = True
     if "index" not in selected_keys:
         config.no_index = True
     if "meta" not in selected_keys:
@@ -154,13 +151,14 @@ def run_pipeline(config: Config):
                 raise SystemExit(1)
         console.print(f"Found {len(zips)} ZIP(s): {', '.join(z.name for z in zips)}")
 
-    if not config.output:
+    if not config.output and not (config.info or config.dry_run):
         console.print("[red]No output directory set (-o/--output).[/red]")
         raise SystemExit(1)
 
     # Created further down, so --info and --dry-run leave no empty folder behind.
-    output_dir = config.output
-    console.print(f"Output: {output_dir}")
+    # Without -o those two run against a placeholder that is never written to.
+    output_dir = config.output or Path("snapxo-dry-run")
+    console.print(f"Output: {output_dir}" if config.output else "Output: none (nothing is written)")
 
     console.rule("[bold yellow]Step 2: Inspect[/bold yellow]")
     file_stats = {"images": 0, "videos": 0, "overlays": 0,
@@ -291,6 +289,11 @@ def run_pipeline(config: Config):
         elif config.only_videos:
             files_to_organize = [f for f in files_to_organize if f.is_video]
 
+        if config.since or config.until:
+            before = len(files_to_organize)
+            files_to_organize = [f for f in files_to_organize if config.in_date_range(f.date)]
+            console.print(f"Date range keeps {len(files_to_organize)} of {before} files")
+
         file_index = organize_into_folders(
             files_to_organize, output_dir,
             folder_structure=config.folder_structure,
@@ -387,34 +390,6 @@ def run_pipeline(config: Config):
                 console.print(f"Loaded {len(file_index)} files from existing manifest")
         media_map = build_media_id_map(file_index, dup_alias)
 
-    if config.should_process_stickers():
-        console.rule("[bold yellow]Step 15: Stickers[/bold yellow]")
-        if not _done_already(checkpoint, "stickers"):
-            stickers_data = json_data.get("custom_sticker", {})
-            sticker_list = stickers_data.get("My Custom Stickers", []) if isinstance(stickers_data, dict) else []
-            sticker_files = []
-            for s in sticker_list:
-                if isinstance(s, dict) and s.get("Content"):
-                    fname = s["Content"]
-                    # Try json/ dir first, then root
-                    for base in [export_dir / "json", export_dir]:
-                        candidate = base / fname
-                        if candidate.is_file():
-                            sticker_files.append(candidate)
-                            break
-            if sticker_files and not config.dry_run:
-                sticker_dir = output_dir / "_stickers"
-                sticker_dir.mkdir(exist_ok=True)
-                for sf in sticker_files:
-                    shutil.copy2(str(sf), str(sticker_dir / sf.name))
-            total = len(sticker_list)
-            found = len(sticker_files)
-            if found == 0 and total > 0:
-                console.print(f"0 of {total} sticker files found in export (files not included by Snapchat)")
-            else:
-                console.print(f"Copied {found}/{total} stickers")
-            checkpoint.complete_step("stickers")
-
     if config.should_process_conversations():
         console.rule("[bold yellow]Step 16: Conversations[/bold yellow]")
         if not _done_already(checkpoint, "conversations"):
@@ -424,6 +399,8 @@ def run_pipeline(config: Config):
                 conversations_for=config.conversations_for or None,
                 min_messages=config.conversations_min_messages,
                 media_map=media_map,
+                since=config.since,
+                until=config.until,
                 dry_run=config.dry_run,
                 verbose=config.verbose,
             )
@@ -439,7 +416,7 @@ def run_pipeline(config: Config):
                 dry_run=config.dry_run,
             )
             console.print("Generated stats.html")
-            if config.conversation_format == "pdf" and not config.dry_run:
+            if config.stats_format == "pdf" and not config.dry_run:
                 render_single(output_dir / "stats.html")
             checkpoint.complete_step("stats")
 

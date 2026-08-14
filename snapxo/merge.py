@@ -291,15 +291,24 @@ def _verify_transferred(records: list[dict], output: Path) -> list[str]:
 
 def merge_outputs(
     inputs: list[Path],
-    output: Path,
+    output: Path | None,
     hardlink: bool = False,
     delete_sources: bool = False,
     yes: bool = False,
     folder_structure: str = "year",
     conversation_format: str = "html",
+    index_format: str = "html",
+    verify: bool = True,
+    skip_damaged: bool = False,
     dry_run: bool = False,
 ) -> int:
     console.rule("[bold yellow]Collect[/bold yellow]")
+    if output is None:
+        if not dry_run:
+            console.print("[red]No output directory set (-o/--output).[/red]")
+            return 0
+        # Never written to, it only keeps the dry run's paths printable.
+        output = Path("snapxo-dry-run")
     inputs = expand_inputs(inputs)
     if len(inputs) < 2:
         console.print("[red]Need at least two output folders to merge.[/red]")

@@ -9,7 +9,6 @@ def test_a_plain_config_processes_everything():
     assert c.should_process_conversations()
     assert c.should_process_stats()
     assert c.should_process_map()
-    assert c.should_process_stickers()
     assert c.should_process_meta()
     assert c.should_encode()
     assert c.should_overlay()
@@ -27,7 +26,6 @@ def test_a_no_flag_turns_its_step_off():
     assert not Config(no_conversations=True).should_process_conversations()
     assert not Config(no_stats=True).should_process_stats()
     assert not Config(no_map=True).should_process_map()
-    assert not Config(no_stickers=True).should_process_stickers()
     assert not Config(no_meta=True).should_process_meta()
 
 

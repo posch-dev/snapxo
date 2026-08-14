@@ -20,7 +20,10 @@ class Config:
     only_conversations: bool = False
     only_stats: bool = False
     only_map: bool = False
-    only_stickers: bool = False
+
+    # Date range, "YYYY-MM-DD", both bounds inclusive
+    since: str | None = None
+    until: str | None = None
 
     # Skip
     no_encode: bool = False
@@ -31,7 +34,6 @@ class Config:
     no_conversations: bool = False
     no_stats: bool = False
     no_map: bool = False
-    no_stickers: bool = False
     no_meta: bool = False
 
     # Encoding
@@ -43,6 +45,8 @@ class Config:
     # Output format
     folder_structure: str = "year"
     conversation_format: str = "html"
+    index_format: str = "html"
+    stats_format: str = "html"
 
     # Conversations
     conversations_for: list[str] = field(default_factory=list)
@@ -55,6 +59,7 @@ class Config:
     resume: bool = True
     verbose: bool = False
     clean: bool = False
+    checksums: bool = False
 
     @property
     def has_only_filter(self) -> bool:
@@ -62,7 +67,6 @@ class Config:
             self.only_media, self.only_memories, self.only_chat_media,
             self.only_voice, self.only_photos, self.only_videos,
             self.only_conversations, self.only_stats, self.only_map,
-            self.only_stickers,
         ])
 
     def should_process_media(self) -> bool:
@@ -92,19 +96,29 @@ class Config:
             return True
         return self.only_map
 
-    def should_process_stickers(self) -> bool:
-        if self.no_stickers:
-            return False
-        if not self.has_only_filter:
-            return True
-        return self.only_stickers
-
     def should_process_meta(self) -> bool:
         if self.no_meta:
             return False
         if not self.has_only_filter:
             return True
         return False
+
+    def wants_pdf(self) -> bool:
+        return "pdf" in (self.conversation_format, self.index_format, self.stats_format)
+
+    def in_date_range(self, date: str | None) -> bool:
+        # `date` is the "YYYY-MM-DD" prefix used everywhere in the file index. Anything
+        # without a usable date is kept, dropping it would hide files over a typo.
+        if not self.since and not self.until:
+            return True
+        if not date or len(date) < 10:
+            return True
+        day = date[:10]
+        if self.since and day < self.since:
+            return False
+        if self.until and day > self.until:
+            return False
+        return True
 
     def should_encode(self) -> bool:
         return not self.no_encode and self.should_process_media()

@@ -104,6 +104,25 @@ def _parse_conversations(json_data: dict, own_username: str | None = None) -> di
     return conversations
 
 
+def _filter_by_date(conversations: dict[str, list[dict]], since: str | None, until: str | None) -> dict[str, list[dict]]:
+    # Timestamps look like "2026-07-20 14:32:05 UTC", both bounds are inclusive.
+    # Messages without a usable timestamp stay, so a chat never loses content silently.
+    filtered = {}
+    for contact, messages in conversations.items():
+        kept = []
+        for msg in messages:
+            day = str(msg.get("timestamp", ""))[:10]
+            if len(day) == 10:
+                if since and day < since:
+                    continue
+                if until and day > until:
+                    continue
+            kept.append(msg)
+        if kept:
+            filtered[contact] = kept
+    return filtered
+
+
 def _resolve_media(msg: dict, media_map: dict[str, dict]) -> list[dict]:
     # Look up the files a message refers to. A Media ID is the chat_media filename
     # minus date prefix and extension, so this is exact, no date guessing.
@@ -348,6 +367,8 @@ def generate_conversations(
     conversations_for: list[str] | None = None,
     min_messages: int = 1,
     media_map: dict[str, dict] | None = None,
+    since: str | None = None,
+    until: str | None = None,
     dry_run: bool = False,
     verbose: bool = False,
 ) -> int:
@@ -359,6 +380,8 @@ def generate_conversations(
             own_username = basic.get("Username")
 
     conversations = _parse_conversations(json_data, own_username)
+    if since or until:
+        conversations = _filter_by_date(conversations, since, until)
 
     conv_dir = output_dir / "conversations"
     if not dry_run:
