@@ -522,6 +522,7 @@ def merge_outputs(
     )
 
     console.rule("[bold yellow]Regenerate[/bold yellow]")
+    thumbs = build_thumbnails(file_index, output, dry_run=dry_run)
     if json_data:
         media_map = build_media_id_map(file_index)
         conv_count = generate_conversations(
@@ -540,7 +541,6 @@ def merge_outputs(
     else:
         console.print("[yellow]No JSON data available - skipping conversations, stats and map[/yellow]")
 
-    thumbs = build_thumbnails(file_index, output, dry_run=dry_run)
     generate_index_html(file_index, output, json_data=json_data, dry_run=dry_run, thumbs=thumbs)
     if index_format == "pdf":
         generate_index_pdf(file_index, output, json_data=json_data, thumbs=thumbs, dry_run=dry_run)

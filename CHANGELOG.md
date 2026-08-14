@@ -16,7 +16,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   print build of the gallery, with name, date, source, sender, chat, size and
   coordinates under each tile
 - **Thumbnails**: preview images are written once to `_meta/thumbs/` and used by
-  both the gallery and the PDF, instead of the tiles pointing at the full files
+  the gallery, its PDF and the images embedded in the conversations, instead of
+  those pages pointing at the full files. A click still opens the original, and
+  the conversation PDFs keep the full image, where it is printed much larger
 - **`--stats-format html|pdf`**, which replaces the hidden coupling where
   `--conversation-format pdf` also rendered `stats.html`
 - **`snapxo verify`**: checks a finished folder against its manifest. Without

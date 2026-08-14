@@ -150,7 +150,7 @@ output/
 │   ├── manifest.json        What each file is and where it came from
 │   ├── checksums.json       Fingerprint for `snapxo verify`
 │   ├── integrity.json       Files that arrived damaged, if any
-│   ├── thumbs/              Preview images for the gallery and the PDF
+│   ├── thumbs/              Preview images for the gallery and the chats
 │   ├── json/
 │   └── html/
 ├── conversations/           Per-contact chat files

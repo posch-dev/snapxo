@@ -166,8 +166,11 @@ def _media_html(entry: dict, pdf_mode: bool = False) -> str:
         # Lazy loading is right for the browser but wrong for PDF: images below
         # the viewport would never load and end up missing from the document.
         lazy = "" if pdf_mode else ' loading="lazy"'
+        # The PDF keeps the full image, it is printed far larger than a chat bubble
+        thumb = entry.get("thumb")
+        src = html.escape(f"../{thumb}") if thumb and not pdf_mode else href
         return (f'<div class="msg-media"><a href="{href}" target="_blank">'
-                f'<img src="{href}"{lazy} alt="{label}"></a>{note}</div>')
+                f'<img src="{src}"{lazy} alt="{label}"></a>{note}</div>')
 
     if pdf_mode:
         icon = "&#127916;" if ftype == "video" else "&#127908;"

@@ -89,3 +89,25 @@ def test_messages_carry_an_anchor():
     page = generate_conversation_html("john-doe", messages)
 
     assert f'id="{message_anchor(0)}"' in page
+
+
+def test_conversation_images_use_the_thumbnail_but_link_the_full_file():
+    from snapxo.conversations import _media_html
+
+    entry = {"subfolder": "2026", "new_name": "2026-05-04_0005.jpg", "type": "image",
+             "thumb": "_meta/thumbs/2026__2026-05-04_0005.jpg"}
+
+    html = _media_html(entry)
+    assert 'src="../_meta/thumbs/2026__2026-05-04_0005.jpg"' in html
+    assert 'href="../2026/2026-05-04_0005.jpg"' in html
+
+    # the PDF prints the image far larger than a chat bubble, so it keeps the original
+    assert 'src="../2026/2026-05-04_0005.jpg"' in _media_html(entry, pdf_mode=True)
+
+
+def test_an_image_without_a_thumbnail_falls_back_to_the_full_file():
+    from snapxo.conversations import _media_html
+
+    entry = {"subfolder": "2026", "new_name": "2026-05-04_0005.jpg", "type": "image"}
+
+    assert 'src="../2026/2026-05-04_0005.jpg"' in _media_html(entry)

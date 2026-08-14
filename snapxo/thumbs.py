@@ -60,6 +60,7 @@ def build_thumbnails(
 
         if target.is_file() and target.stat().st_size > 0:
             thumbs[i] = rel
+            entry["thumb"] = rel
             reused += 1
             continue
 
@@ -75,6 +76,9 @@ def build_thumbnails(
 
         if ok:
             thumbs[i] = rel
+            # on the entry as well, the conversations reach their media through
+            # the media map and never see this index
+            entry["thumb"] = rel
             built += 1
             if verbose:
                 console.print(f"  [cyan][{built}][/cyan] {target.name}")

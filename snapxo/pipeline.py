@@ -433,8 +433,15 @@ def run_pipeline(config: Config):
                 console.print(f"Loaded {len(file_index)} files from existing manifest")
         media_map = build_media_id_map(file_index, dup_alias)
 
+    # Before the conversations, they embed the same previews as the gallery
+    thumbs: dict[int, str] = {}
+    if file_index and (config.should_index() or config.should_process_conversations()):
+        console.rule("[bold yellow]Step 16: Thumbnails[/bold yellow]")
+        thumbs = build_thumbnails(file_index, output_dir, ff=ff if ff.check() else None,
+                                  dry_run=config.dry_run, verbose=config.verbose)
+
     if config.should_process_conversations():
-        console.rule("[bold yellow]Step 16: Conversations[/bold yellow]")
+        console.rule("[bold yellow]Step 17: Conversations[/bold yellow]")
         if not _done_already(checkpoint, "conversations"):
             conv_count = generate_conversations(
                 json_data, output_dir,
@@ -451,7 +458,7 @@ def run_pipeline(config: Config):
             checkpoint.complete_step("conversations")
 
     if config.should_process_stats():
-        console.rule("[bold yellow]Step 17: Stats[/bold yellow]")
+        console.rule("[bold yellow]Step 18: Stats[/bold yellow]")
         if not _done_already(checkpoint, "stats"):
             generate_stats_html(
                 json_data, file_stats, output_dir,
@@ -464,17 +471,15 @@ def run_pipeline(config: Config):
             checkpoint.complete_step("stats")
 
     if config.should_process_map():
-        console.rule("[bold yellow]Step 18: Snap Map[/bold yellow]")
+        console.rule("[bold yellow]Step 19: Snap Map[/bold yellow]")
         if not _done_already(checkpoint, "map"):
             if generate_map_html(json_data, output_dir, file_index=file_index or None, dry_run=config.dry_run):
                 console.print("Generated map.html")
             checkpoint.complete_step("map")
 
     if config.should_index() and file_index:
-        console.rule("[bold yellow]Step 19: Index[/bold yellow]")
+        console.rule("[bold yellow]Step 20: Index[/bold yellow]")
         if not _done_already(checkpoint, "index"):
-            thumbs = build_thumbnails(file_index, output_dir, ff=ff if ff.check() else None,
-                                      dry_run=config.dry_run, verbose=config.verbose)
             generate_index_html(file_index, output_dir, json_data=json_data,
                                 dry_run=config.dry_run, thumbs=thumbs)
             if config.index_format == "pdf":
@@ -483,7 +488,7 @@ def run_pipeline(config: Config):
             checkpoint.complete_step("index")
 
     if config.should_process_meta():
-        console.rule("[bold yellow]Step 20: Meta[/bold yellow]")
+        console.rule("[bold yellow]Step 21: Meta[/bold yellow]")
         if not _done_already(checkpoint, "meta"):
             meta_dir = output_dir / "_meta"
             if not config.dry_run:
@@ -510,12 +515,12 @@ def run_pipeline(config: Config):
             checkpoint.complete_step("meta")
 
     if config.checksums and not config.dry_run and file_index:
-        console.rule("[bold yellow]Step 21: Checksums[/bold yellow]")
+        console.rule("[bold yellow]Step 22: Checksums[/bold yellow]")
         _, computed = verify_folder(output_dir, hashes=True)
         if write_checksums(output_dir, computed):
             console.print(f"Fingerprinted {len(computed)} files for later `snapxo verify` runs")
 
-    console.rule("[bold yellow]Step 22: Cleanup[/bold yellow]")
+    console.rule("[bold yellow]Step 23: Cleanup[/bold yellow]")
     removed = cleanup_tmp_files(output_dir, verbose=config.verbose)
     console.print(f"Cleaned {removed} tmp files")
 
