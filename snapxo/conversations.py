@@ -5,6 +5,7 @@ from pathlib import Path
 
 from rich.console import Console
 
+from .chats import PREVIEW_CHARS, SEARCH_CHARS, generate_chats_html, message_anchor
 from .pdf import PdfRenderer
 from .webassets import (
     date_format_css,
@@ -269,29 +270,31 @@ def generate_conversation_html(
 
         ts = _ts_html(msg["timestamp"])
         text = msg["text"]
+        # Anchor so a search hit in chats.html can jump straight to the message
+        at = f' id="{message_anchor(i)}"'
 
         if media_type == "TEXT" and text:
-            body_parts.append(f'<div class="msg">{html.escape(text)} {ts}</div>')
+            body_parts.append(f'<div{at} class="msg">{html.escape(text)} {ts}</div>')
         elif media_type == "TEXT" and not text:
-            body_parts.append(f'<div class="msg" style="color:#666">[Message not saved] {ts}</div>')
+            body_parts.append(f'<div{at} class="msg" style="color:#666">[Message not saved] {ts}</div>')
         elif media_type in ("MEDIA", "NOTE"):
             attachments = _resolve_media(msg, media_map)
             if attachments:
-                body_parts.append(f'<div class="msg">{ts}</div>')
+                body_parts.append(f'<div{at} class="msg">{ts}</div>')
                 for entry in attachments:
                     body_parts.append(_media_html(entry, pdf_mode))
             else:
                 placeholder = "[Voice Note]" if media_type == "NOTE" else "[Media]"
-                body_parts.append(f'<div class="msg media">{placeholder} {ts}</div>')
+                body_parts.append(f'<div{at} class="msg media">{placeholder} {ts}</div>')
         elif media_type == "STICKER":
-            body_parts.append(f'<div class="msg">[Sticker] {ts}</div>')
+            body_parts.append(f'<div{at} class="msg">[Sticker] {ts}</div>')
         elif media_type in ("SHARE", "SHARESAVEDSTORY"):
-            body_parts.append(f'<div class="msg">[Shared] {html.escape(text)} {ts}</div>')
+            body_parts.append(f'<div{at} class="msg">[Shared] {html.escape(text)} {ts}</div>')
         elif media_type in SNAP_TYPES:
-            body_parts.append(f'<div class="msg snap">[Snap] {ts}</div>')
+            body_parts.append(f'<div{at} class="msg snap">[Snap] {ts}</div>')
         else:
             display_text = html.escape(text) if text else f"[{media_type}]"
-            body_parts.append(f'<div class="msg">{display_text} {ts}</div>')
+            body_parts.append(f'<div{at} class="msg">{display_text} {ts}</div>')
 
         i += 1
 
@@ -389,7 +392,7 @@ def generate_conversations(
     want_pdf = conversation_format == "pdf" and not dry_run
     # One browser for all conversations instead of one process per file
     with (PdfRenderer() if want_pdf else nullcontext()) as renderer:
-        generated, skipped_empty, embedded = _render_all(
+        generated, skipped_empty, embedded, records = _render_all(
             conversations, conv_dir, output_dir, own_username,
             conversation_format, conversations_for, min_messages,
             media_map, dry_run, renderer, verbose,
@@ -399,6 +402,8 @@ def generate_conversations(
         console.print(f"  Skipped {skipped_empty} empty conversations (no real content)")
     if embedded:
         console.print(f"  Embedded {embedded} media files matched by Media ID")
+
+    generate_chats_html(records, output_dir, dry_run=dry_run)
 
     return generated
 
@@ -415,10 +420,11 @@ def _render_all(
     dry_run: bool,
     renderer,
     verbose: bool,
-) -> tuple[int, int, int]:
+) -> tuple[int, int, int, list[dict]]:
     generated = 0
     skipped_empty = 0
     embedded = 0
+    records: list[dict] = []
     for contact, messages in sorted(conversations.items()):
         if len(messages) < min_messages:
             continue
@@ -470,6 +476,11 @@ def _render_all(
         else:
             (conv_dir / filename).write_text(content, encoding="utf-8")
 
+        records.append(_chat_record(
+            conv_title or contact, is_group, messages,
+            f"conversations/{safe_name}.pdf" if renderer is not None else f"conversations/{filename}",
+        ))
+
         generated += 1
         if verbose:
             display = conv_title or contact
@@ -477,7 +488,37 @@ def _render_all(
             console.print(f"  [cyan][{generated}][/cyan] {filename}")
             console.print(f"    [dim]{real_count} messages - {display}[/dim]")
 
-    return generated, skipped_empty, embedded
+    return generated, skipped_empty, embedded, records
+
+
+def _chat_record(title: str, is_group: bool, messages: list[dict], rel_file: str) -> dict:
+    # One entry for chats.html: the list row plus the searchable text of the chat.
+    real = [m for m in messages if m["media_type"].upper() not in STATUS_TYPES]
+    index = []
+    for i, msg in enumerate(messages):
+        text = (msg.get("text") or "").strip()
+        if not text or msg["media_type"].upper() in STATUS_TYPES:
+            continue
+        index.append({"a": message_anchor(i), "s": msg["sender"], "t": msg["timestamp"],
+                      "x": text[:SEARCH_CHARS]})
+
+    preview = ""
+    for msg in reversed(real):
+        if msg.get("text"):
+            preview = msg["text"][:PREVIEW_CHARS]
+            break
+        preview = {"MEDIA": "[Media]", "NOTE": "[Voice note]"}.get(msg["media_type"].upper(), "[Snap]")
+        break
+
+    return {
+        "title": title,
+        "file": rel_file,
+        "is_group": is_group,
+        "messages": len(real),
+        "last": real[-1]["timestamp"] if real else "",
+        "preview": preview,
+        "index": index,
+    }
 
 
 def _write_pdf(html_content: str, base_path: Path, renderer):

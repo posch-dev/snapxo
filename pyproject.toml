@@ -110,6 +110,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # These build HTML, CSS and JS as string literals, where wrapping a line only
 # makes the generated markup harder to read.
+"snapxo/chats.py" = ["E501"]
 "snapxo/indexer.py" = ["E501"]
 "snapxo/stats.py" = ["E501"]
 "snapxo/snapmap.py" = ["E501"]

@@ -439,6 +439,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 h1 { text-align: center; margin: 20px 0 30px; color: #FFFE00; font-size: 24px; }
 h2 { margin: 20px 0 10px; color: #FFFE00; border-bottom: 1px solid #333; padding-bottom: 5px; }
 .stats { text-align: center; color: #888; margin-bottom: 30px; }
+.page-nav { text-align: center; margin-bottom: 18px; }
+.page-nav a { color: #FFFE00; text-decoration: none; margin: 0 10px; }
+.page-nav a:hover { text-decoration: underline; }
 .year-nav { text-align: center; margin-bottom: 20px; }
 .year-nav a { color: #FFFE00; text-decoration: none; margin: 0 10px; font-size: 18px; }
 .year-nav a:hover { text-decoration: underline; }
@@ -486,6 +489,7 @@ __DATE_CSS__
 </head>
 <body>
 <h1>Snapchat Memories</h1>
+<div class="page-nav"><a href="chats.html">Chats</a><a href="stats.html">Statistics</a><a href="map.html">Snap Map</a></div>
 '''
 
     page += f'<div class="stats">{len(file_index)} files | {n_vid} Videos | {n_img} Images | {n_aud} Voice Messages</div>\n'
