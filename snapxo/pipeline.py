@@ -31,7 +31,7 @@ from .manifest import (
     manifest_to_file_index,
     write_manifest,
 )
-from .metadata import apply_gps_metadata
+from .metadata import apply_file_times, apply_gps_metadata
 from .organizer import organize_into_folders
 from .overlay import burn_overlays, copy_unmatched_overlays, match_overlays
 from .pdf import render_single
@@ -400,6 +400,13 @@ def run_pipeline(config: Config):
                 written = apply_gps_metadata(file_index, memories_history, dry_run=config.dry_run)
                 console.print(f"Wrote GPS to {written} images")
             checkpoint.complete_step("exif")
+
+    if config.should_process_media() and file_index:
+        console.rule("[bold yellow]Step 15: File dates[/bold yellow]")
+        if not _done_already(checkpoint, "filetimes"):
+            touched = apply_file_times(file_index, dry_run=config.dry_run)
+            console.print(f"Set the file date on {touched} files")
+            checkpoint.complete_step("filetimes")
 
     # Step 15a: Manifest, records what ended up in the output folder so later
     # runs and `merge` can still tell where each file came from.

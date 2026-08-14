@@ -1,5 +1,7 @@
+import os
 import re
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -8,6 +10,27 @@ console = Console()
 
 # Parse "Latitude, Longitude: -48.87667, -123.39333"
 LOCATION_RE = re.compile(r"Latitude,\s*Longitude:\s*([-\d.]+),\s*([-\d.]+)")
+
+
+def apply_file_times(file_index: list[dict], dry_run: bool = False) -> int:
+    # Videos carry no EXIF, so the file date is all a photo app has to sort by.
+    if dry_run:
+        return 0
+
+    written = 0
+    for entry in file_index:
+        dest = entry.get("dest")
+        date = entry.get("date") or ""
+        if not dest or len(date) < 10:
+            continue
+        try:
+            # Noon, so no timezone can push the file into the day before
+            stamp = datetime.strptime(date[:10], "%Y-%m-%d").replace(hour=12).timestamp()
+            os.utime(dest, (stamp, stamp))
+            written += 1
+        except (ValueError, OSError):
+            continue
+    return written
 
 
 def _parse_location_string(location: str) -> tuple[float, float] | None:

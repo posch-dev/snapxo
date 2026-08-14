@@ -98,3 +98,31 @@ def test_dry_run_counts_without_touching_files(tmp_path: Path):
 
     assert apply_gps_metadata(index, history, dry_run=True) == 1
     assert Path(index[0]["dest"]).read_bytes() == before
+
+
+def test_file_dates_come_from_the_capture_date(tmp_path):
+    from datetime import datetime
+
+    from snapxo.metadata import apply_file_times
+
+    media = tmp_path / "2026" / "2026-05-01_0001.jpg"
+    media.parent.mkdir(parents=True)
+    media.write_bytes(b"data")
+    entry = {"dest": str(media), "date": "2026-05-01"}
+
+    assert apply_file_times([entry]) == 1
+
+    stamp = datetime.fromtimestamp(media.stat().st_mtime)
+    assert (stamp.year, stamp.month, stamp.day) == (2026, 5, 1)
+
+
+def test_undated_and_missing_files_are_left_alone(tmp_path):
+    from snapxo.metadata import apply_file_times
+
+    media = tmp_path / "a.jpg"
+    media.write_bytes(b"data")
+    before = media.stat().st_mtime_ns
+
+    assert apply_file_times([{"dest": str(media), "date": ""},
+                             {"dest": str(tmp_path / "gone.jpg"), "date": "2026-05-01"}]) == 0
+    assert media.stat().st_mtime_ns == before

@@ -16,6 +16,7 @@ from .conversations import generate_conversations
 from .indexer import generate_index_html, generate_index_pdf
 from .inspector import load_json_data
 from .manifest import build_media_id_map, load_manifest, write_manifest
+from .metadata import apply_file_times
 from .snapmap import generate_map_html
 from .stats import generate_stats_html
 from .thumbs import build_thumbnails
@@ -377,6 +378,10 @@ def merge_outputs(
             "size": rec["src"].stat().st_size,
             "dest": str(dest),
         })
+
+    touched = apply_file_times(file_index, dry_run=dry_run)
+    if touched:
+        console.print(f"  Set the file date on {touched} files")
 
     console.rule("[bold yellow]Merge metadata[/bold yellow]")
     datas = []
