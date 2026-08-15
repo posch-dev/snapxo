@@ -4,6 +4,15 @@ All notable changes to SnapXO are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the version numbers
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-08-15
+
+### Changed
+
+- **README**: screenshots of the gallery, the chat overview and a conversation,
+  badges for version, Python and license, and a shorter description of what the
+  tool is for. The license badge points at the file on GitHub, so the link also
+  works on the PyPI page. No changes to the code
+
 ## [1.1.0] - 2026-08-14
 
 ### Added

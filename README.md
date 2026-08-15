@@ -1,26 +1,39 @@
 # SnapXO (Snapchat Export Organizer)
 
-Turn a Snapchat data export into a clean, browsable archive
-with sorted media, efficient video encoding, GPS metadata, chat
-histories, statistics and an interactive map.
+[![PyPI](https://img.shields.io/pypi/v/snapxo)](https://pypi.org/project/snapxo/)
+[![Python](https://img.shields.io/pypi/pyversions/snapxo)](https://pypi.org/project/snapxo/)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](https://github.com/posch-dev/snapxo/blob/main/LICENSE)
+
+Snapchat hands you your data as a few thousand files named by ID and a pile of
+JSON. This turns it into an archive you can still open in ten years: a clean,
+browsable archive with sorted media, efficient video encoding, GPS metadata,
+chat histories, statistics and an interactive map.
 
 ```bash
 pip install snapxo
 ```
 
+<table>
+<tr>
+<td valign="top"><img src="https://raw.githubusercontent.com/posch-dev/snapxo/main/.github/assets/gallery.jpg" height="230" alt="Media gallery"></td>
+<td valign="top"><img src="https://raw.githubusercontent.com/posch-dev/snapxo/main/.github/assets/chats.png" height="230" alt="Chat overview with a search across all messages"></td>
+<td valign="top"><img src="https://raw.githubusercontent.com/posch-dev/snapxo/main/.github/assets/conversation.png" height="230" alt="Rebuilt conversation with attachments"></td>
+</tr>
+</table>
+
 ## Features
 
+- **Media Gallery**: `index.html` with navigation, type filters, thumbnails and a details panel per file
+- **Chat Overview**: `chats.html` lists every chat like the app does, with a search across all messages
+- **Conversations**: per-contact chat pages with messages, photos, videos and voice messages
 - **Media Organization**: memories and chat media in structured folders with clean filenames (`2026-05-08_0444.mp4`)
 - **H.265 Encoding**: Intel QSV hardware acceleration, automatic fallback to libx265
 - **Overlay Burning**: Snapchat overlays burned onto photos and videos
 - **GPS/EXIF**: coordinates from `memories_history.json` written into image EXIF
 - **Duplicate Removal**: MD5 deduplication, before encoding
 - **Voice Messages**: audio-only MP4s detected and converted to MP3
-- **Conversations**: per-contact chat pages with messages, photos, videos and voice messages
-- **Chat Overview**: `chats.html` lists every chat like the app does, with a search across all messages
-- **Media Gallery**: `index.html` with navigation, type filters, thumbnails and a details panel per file
-- **Statistics**: overview page with cards and detail tables
-- **Snap Map**: interactive map with route, timeline slider, playback and the location of each memory
+- **Statistics**: memories, chat media, friends, calls, searches and your Snapscore, with a table behind every number
+- **Snap Map**: every memory pinned where it was taken, with a timeline you can play back
 - **Merge**: several exports combined into one, deduplicated and renumbered, without re-encoding
 - **PDF Export**: conversations, statistics and the media gallery as PDF
 - **Verify**: a finished archive checked against its manifest and its checksums
