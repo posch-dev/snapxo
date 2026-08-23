@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from snapxo.fixtypes import _detect_type, fix_unknown_files
+from snapxo.read.fixtypes import _detect_type, fix_unknown_files
 
 
 def _as_unknown(tmp_path: Path, name: str, save) -> Path:

@@ -3,9 +3,9 @@ import json
 import pytest
 from conftest import write_image
 
-from snapxo.manifest import write_manifest
-from snapxo.merge import merge_outputs
-from snapxo.verify import load_checksums, load_integrity, write_checksums
+from snapxo.archive.manifest import write_manifest
+from snapxo.archive.merge import merge_outputs
+from snapxo.archive.verify import load_checksums, load_integrity, write_checksums
 
 
 def _output_folder(root, name, files):
@@ -69,7 +69,7 @@ def test_no_verify_takes_damaged_files_along_marked(tmp_path):
     damaged = [e for e in manifest["files"] if e.get("integrity")]
     assert len(damaged) == 1
     # the gallery has to show it as damaged
-    assert "damaged" in (out / "index.html").read_text(encoding="utf-8")
+    assert '"bad":"wrong size"' in (out / "_meta" / "app-media.js").read_text(encoding="utf-8")
 
 
 def test_skip_damaged_leaves_them_out(tmp_path):
@@ -107,3 +107,27 @@ def test_changed_content_is_caught_through_the_checksums(tmp_path):
     marked = load_integrity(out)
     assert len(marked) == 1
     assert marked[0]["reason"] == "changed content"
+
+
+def test_a_single_value_comes_from_the_newer_export():
+    from snapxo.archive.merge import merge_json_data
+
+    newer = {"ranking": {"Statistics": {"Snapscore": "200"}}}
+    older = {"ranking": {"Statistics": {"Snapscore": "100"}}}
+
+    # merge_json_data takes them newest first, which merge_outputs sorts for
+    merged = merge_json_data([newer, older])
+
+    assert merged["ranking"]["Statistics"]["Snapscore"] == "200"
+
+
+def test_the_same_message_in_both_exports_is_kept_once():
+    from snapxo.archive.merge import merge_json_data
+
+    message = {"From": "friend_one", "Media Type": "TEXT",
+               "Created": "2026-05-04 10:00:00 UTC", "Content": "hey"}
+
+    merged = merge_json_data([{"chat_history": {"friend_one": [message]}},
+                              {"chat_history": {"friend_one": [dict(message)]}}])
+
+    assert len(merged["chat_history"]["friend_one"]) == 1

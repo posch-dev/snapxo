@@ -1,6 +1,12 @@
 import json
+import os
 import shutil
 from pathlib import Path
+
+# Rich wraps at the console width, and the messages carry temp paths whose length
+# differs per platform. Without this the assertions about a message's text break
+# wherever the wrap happens to land.
+os.environ["COLUMNS"] = "1000"
 
 import pytest
 from PIL import Image
@@ -14,19 +20,21 @@ def write_image(path: Path, color: str = "red", size: tuple[int, int] = (32, 32)
 
 @pytest.fixture
 def export_dir(tmp_path: Path) -> Path:
-    # A minimal extracted Snapchat export: images only, so nothing in the
-    # pipeline reaches for ffmpeg or ffprobe.
+    # Images only, so nothing in the pipeline reaches for ffmpeg or ffprobe.
     root = tmp_path / "export"
     memories = root / "memories"
     chat = root / "chat_media"
     js = root / "json"
-    for d in (memories, chat, js):
+    html = root / "html"
+    for d in (memories, chat, js, html):
         d.mkdir(parents=True)
+
+    (html / "chat_history.html").write_text("<html>chat</html>", encoding="utf-8")
 
     write_image(memories / "2026-05-01_1200-media.jpg", "red")
     write_image(memories / "2026-05-02_1200-media.jpg", "green")
     write_image(memories / "2026-05-03_1200-media.jpg", "blue")
-    # exact copy of the first, so dedup has something to find
+    # a copy, so dedup has something to find
     shutil.copy2(memories / "2026-05-01_1200-media.jpg", memories / "2026-05-01_1201-media.jpg")
     write_image(chat / "2026-05-04_1400-chatmediaid.jpg", "yellow")
 

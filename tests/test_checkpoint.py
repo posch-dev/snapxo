@@ -2,7 +2,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from snapxo.checkpoint import CHECKPOINT_FILE, Checkpoint, config_fingerprint
+from snapxo.archive.checkpoint import CHECKPOINT_FILE, Checkpoint, config_fingerprint
 from snapxo.config import Config
 
 
@@ -20,7 +20,7 @@ def test_fingerprint_changes_with_the_output_folder(tmp_path: Path):
 
 
 def test_fingerprint_changes_with_a_filter(tmp_path: Path):
-    other = replace(base_config(tmp_path), only_stats=True)
+    other = replace(base_config(tmp_path), media_types=["photos"])
     assert config_fingerprint(base_config(tmp_path)) != config_fingerprint(other)
 
 

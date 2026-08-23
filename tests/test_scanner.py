@@ -2,7 +2,7 @@ from pathlib import Path
 
 from conftest import write_image
 
-from snapxo.scanner import MediaFile, scan_export
+from snapxo.read.scanner import MediaFile, scan_export
 
 
 def test_scan_sorts_memories_overlays_chat_and_unknown(export_dir: Path):

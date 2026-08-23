@@ -3,7 +3,7 @@ from pathlib import Path
 
 from conftest import write_image
 
-from snapxo.dedup import collect_media_files, find_duplicates, remove_duplicates
+from snapxo.media.dedup import collect_media_files, find_duplicates, remove_duplicates
 
 
 def test_find_duplicates_groups_identical_files(tmp_path: Path):

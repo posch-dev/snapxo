@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from conftest import write_image
 
-from snapxo.metadata import _decimal_to_dms, _parse_location_string, apply_gps_metadata, write_exif_gps
+from snapxo.media.metadata import _decimal_to_dms, _parse_location_string, apply_gps_metadata, write_exif_gps
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -103,7 +103,7 @@ def test_dry_run_counts_without_touching_files(tmp_path: Path):
 def test_file_dates_come_from_the_capture_date(tmp_path):
     from datetime import datetime
 
-    from snapxo.metadata import apply_file_times
+    from snapxo.media.metadata import apply_file_times
 
     media = tmp_path / "2026" / "2026-05-01_0001.jpg"
     media.parent.mkdir(parents=True)
@@ -117,7 +117,7 @@ def test_file_dates_come_from_the_capture_date(tmp_path):
 
 
 def test_undated_and_missing_files_are_left_alone(tmp_path):
-    from snapxo.metadata import apply_file_times
+    from snapxo.media.metadata import apply_file_times
 
     media = tmp_path / "a.jpg"
     media.write_bytes(b"data")

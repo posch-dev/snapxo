@@ -2,7 +2,7 @@ from pathlib import Path
 
 from conftest import write_image
 
-from snapxo.manifest import (
+from snapxo.archive.manifest import (
     attach_media_ids,
     build_media_id_map,
     load_manifest,

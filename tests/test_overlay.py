@@ -2,8 +2,8 @@ from pathlib import Path
 
 from conftest import write_image
 
-from snapxo.overlay import copy_unmatched_overlays, match_overlays
-from snapxo.scanner import MediaFile
+from snapxo.media.overlay import copy_unmatched_overlays, match_overlays
+from snapxo.read.scanner import MediaFile
 
 
 def mf(name: str, date: str, uuid: str | None, is_overlay: bool = False, ext: str = ".jpg"):

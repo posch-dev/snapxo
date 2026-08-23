@@ -2,8 +2,8 @@ import json
 
 from conftest import write_image
 
-from snapxo.manifest import write_manifest
-from snapxo.verify import load_checksums, verify_folder, write_checksums
+from snapxo.archive.manifest import write_manifest
+from snapxo.archive.verify import load_checksums, verify_folder, write_checksums
 
 
 def _folder(tmp_path, names=("2026-05-01_0001.jpg", "2026-05-02_0002.jpg")):

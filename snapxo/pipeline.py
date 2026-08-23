@@ -4,18 +4,30 @@ from pathlib import Path
 
 from rich.console import Console
 
-from .archive import GIB, SPACE_MARGIN, free_space, looks_like_zip_bomb, safe_extract, zip_payload
-from .checkpoint import Checkpoint, config_fingerprint
-from .cleanup import cleanup_tmp_files
+from .app.shell import generate_app
+from .archive.checkpoint import Checkpoint, config_fingerprint
+from .archive.cleanup import cleanup_tmp_files
+from .archive.manifest import (
+    attach_media_ids,
+    build_media_id_map,
+    load_manifest,
+    manifest_to_file_index,
+    write_manifest,
+)
+from .archive.verify import verify_folder, write_checksums
+from .clock import load_zone, localize
 from .config import Config
-from .conversations import generate_conversations
-from .dedup import remove_duplicates
-from .deps import require_ffmpeg, require_playwright
-from .encoder import encode_videos
-from .ffmpeg import FFmpeg
-from .fixtypes import fix_unknown_files
-from .indexer import generate_index_html, generate_index_pdf
-from .inspector import (
+from .media.dedup import remove_duplicates
+from .media.encoder import encode_videos
+from .media.mediainfo import attach as attach_media_info
+from .media.metadata import apply_file_times, apply_gps_metadata
+from .media.organizer import organize_into_folders
+from .media.overlay import burn_overlays, copy_unmatched_overlays, match_overlays
+from .media.thumbs import build_thumbnails
+from .media.voice import convert_voice_messages, detect_voice_messages
+from .pages.snapmap import generate_map_html
+from .read.fixtypes import fix_unknown_files
+from .read.inspector import (
     count_json_stats,
     display_summary,
     find_export_inputs,
@@ -24,37 +36,35 @@ from .inspector import (
     load_json_data,
     validate_zip,
 )
-from .manifest import (
-    attach_media_ids,
-    build_media_id_map,
-    load_manifest,
-    manifest_to_file_index,
-    write_manifest,
-)
-from .metadata import apply_file_times, apply_gps_metadata
-from .organizer import organize_into_folders
-from .overlay import burn_overlays, copy_unmatched_overlays, match_overlays
-from .pdf import render_single
-from .scanner import scan_export
-from .snapmap import generate_map_html
-from .stats import generate_stats_html
-from .thumbs import build_thumbnails
-from .verify import verify_folder, write_checksums
-from .voice import convert_voice_messages, detect_voice_messages
+from .read.scanner import scan_export
+from .read.zips import GIB, SPACE_MARGIN, free_space, looks_like_zip_bomb, safe_extract, zip_payload
+from .selection import SOURCES, TYPES
+from .tools.deps import require_ffmpeg
+from .tools.ffmpeg import FFmpeg
 
 console = Console()
 
 
 def _check_external_tools(config: Config, ff: FFmpeg) -> None:
-    # Fail early, with install instructions, if a needed external tool is absent.
-    if config.should_encode():
+    if config.should_encode() or config.should_overlay():
         require_ffmpeg(ff)
-    if config.wants_pdf() and not config.dry_run:
-        require_playwright()
+
+    selection = config.selection
+    if not selection.needs_voice_detection or ff.check():
+        return
+
+    # has_video_stream() answers True whenever ffprobe cannot be run, so without
+    # it every voice message counts as a real video and nothing is found.
+    if not selection.wants_type("videos"):
+        console.print("[red]--types voice needs ffprobe to tell a voice message apart "
+                      "from a video. Without it nothing would be found.[/red]")
+        require_ffmpeg(ff)
+
+    console.print("[yellow]Without ffprobe the voice messages cannot be told apart from "
+                  "videos, so they stay MP4 video files instead of becoming MP3.[/yellow]")
 
 
 def _check_zip_sizes(zips: list[Path], config: Config) -> None:
-    # Runs before extraction, where refusing still costs nothing.
     total_uncompressed = 0
     for z in zips:
         uncompressed, compressed = zip_payload(z)
@@ -79,7 +89,6 @@ def _check_zip_sizes(zips: list[Path], config: Config) -> None:
 
 
 def _done_already(checkpoint, step: str) -> bool:
-    # Only for steps that are finished or not; the per-file loops track themselves.
     if checkpoint.is_step_done(step):
         console.print("Already done, skipping")
         return True
@@ -95,72 +104,72 @@ def _own_username(json_data: dict) -> str | None:
     return None
 
 
-CATEGORIES = [
-    ("media",         "Media (Memories + Chat Media + Voice)"),
-    ("encode",        "Encode videos to H.265"),
-    ("overlay",       "Burn overlays onto media"),
-    ("exif",          "Write EXIF/GPS metadata"),
-    ("dedup",         "Remove duplicates"),
-    ("conversations", "Generate conversations"),
-    ("stats",         "Generate stats HTML"),
-    ("map",           "Generate Snap Map"),
-    ("index",         "Generate media gallery HTML"),
-    ("meta",          "Copy raw metadata"),
+OPTIONAL_STEPS = [
+    ("encode",  "Encode videos to H.265"),
+    ("overlay", "Burn overlays onto the media"),
+    ("exif",    "Write EXIF and GPS into the images"),
+    ("dedup",   "Remove duplicates"),
+    ("meta",    "Copy the raw export to _meta/ (rebuild and merge need it)"),
 ]
 
 
-def _interactive_select(config: Config, console: Console):
-    # Let the user pick which categories to process.
-    console.print("\n[bold]What should be processed?[/bold]")
-    for i, (_key, label) in enumerate(CATEGORIES, 1):
-        console.print(f"  [yellow]{i:2d}[/yellow] {label}")
-    console.print("  [yellow] 0[/yellow] Cancel")
+def _voice_wanted(path: Path, selection) -> bool:
+    # A voice message keeps the source it was found in, so --media still applies.
+    source = "memories" if "memories" in str(path).lower() else "chat"
+    return selection.wants_source(source)
 
-    response = console.input("\n[bold]Enter numbers (comma-separated, e.g. 1,6,7): [/bold]")
-    if response.strip() == "0":
-        raise SystemExit(0)
+
+SOURCE_LABELS = {"memories": "Memories, the ones you saved yourself",
+                 "chat": "Chat media, everything sent in a conversation"}
+TYPE_LABELS = {"photos": "Photos", "videos": "Videos", "voice": "Voice messages"}
+
+
+def _ask_for_numbers(console: Console, question: str, labels: list[str]) -> set[int]:
+    console.print(f"\n[bold]{question}[/bold]")
+    for number, label in enumerate(labels, 1):
+        console.print(f"  [yellow]{number:2d}[/yellow] {label}")
+    console.print("  [dim]Enter for all of them[/dim]")
+
+    response = console.input("\n[bold]Numbers, comma separated: [/bold]").strip()
+    if not response:
+        return set(range(1, len(labels) + 1))
 
     try:
-        selected = {int(x.strip()) for x in response.split(",") if x.strip()}
+        picked = {int(part.strip()) for part in response.split(",") if part.strip()}
     except ValueError:
-        console.print("[red]Invalid input.[/red]")
+        console.print("[red]Those are not numbers.[/red]")
         raise SystemExit(1) from None
 
-    selected_keys = set()
-    for i, (key, _) in enumerate(CATEGORIES, 1):
-        if i in selected:
-            selected_keys.add(key)
-
-    if not selected_keys:
-        console.print("[red]Nothing selected.[/red]")
+    if not picked & set(range(1, len(labels) + 1)):
+        console.print("[red]Nothing picked.[/red]")
         raise SystemExit(1)
+    return picked
 
-    if "media" not in selected_keys:
-        config.only_conversations = True
-    if "encode" not in selected_keys:
-        config.no_encode = True
-    if "overlay" not in selected_keys:
-        config.no_overlay = True
-    if "exif" not in selected_keys:
-        config.no_exif = True
-    if "dedup" not in selected_keys:
-        config.no_dedup = True
-    if "conversations" not in selected_keys:
-        config.no_conversations = True
-    if "stats" not in selected_keys:
-        config.no_stats = True
-    if "map" not in selected_keys:
-        config.no_map = True
-    if "index" not in selected_keys:
-        config.no_index = True
-    if "meta" not in selected_keys:
-        config.no_meta = True
 
-    if "media" in selected_keys:
-        config.only_conversations = False
+def _pick_names(console: Console, question: str, names: tuple[str, ...],
+                labels: dict[str, str]) -> list[str]:
+    wanted = _ask_for_numbers(console, question, [labels[name] for name in names])
+    picked = [name for number, name in enumerate(names, 1) if number in wanted]
+    return [] if len(picked) == len(names) else picked
 
-    chosen = ", ".join(label for key, label in CATEGORIES if key in selected_keys)
-    console.print(f"\n[green]Selected: {chosen}[/green]\n")
+
+def _interactive_select(config: Config, console: Console):
+    # Media first: answering "photos only" makes the encoding question pointless.
+    config.media_sources = _pick_names(console, "Which media should be copied?",
+                                       SOURCES, SOURCE_LABELS)
+    config.media_types = _pick_names(console, "Which kinds?", TYPES, TYPE_LABELS)
+
+    running = _ask_for_numbers(console, "Which steps should run?",
+                               [label for _key, label in OPTIONAL_STEPS])
+    chosen = {key for number, (key, _) in enumerate(OPTIONAL_STEPS, 1) if number in running}
+
+    config.no_encode = "encode" not in chosen
+    config.no_overlay = "overlay" not in chosen
+    config.no_exif = "exif" not in chosen
+    config.no_dedup = "dedup" not in chosen
+    config.no_meta = "meta" not in chosen
+
+    console.print(f"\n[green]Copying {config.selection.describe()}[/green]\n")
 
 
 def run_pipeline(config: Config):
@@ -182,8 +191,7 @@ def run_pipeline(config: Config):
         console.print("[red]No output directory set (-o/--output).[/red]")
         raise SystemExit(1)
 
-    # Created further down, so --info and --dry-run leave no empty folder behind.
-    # Without -o those two run against a placeholder that is never written to.
+    # --info and --dry-run run without -o, against a folder never written to.
     output_dir = config.output or Path("snapxo-dry-run")
     console.print(f"Output: {output_dir}" if config.output else "Output: none (nothing is written)")
 
@@ -201,17 +209,14 @@ def run_pipeline(config: Config):
                 elif isinstance(file_stats[key], list):
                     file_stats[key].extend(zs[key])
 
-    # Initialize ffmpeg early so external tools can be checked before the
-    # expensive extraction step: nobody wants to unpack 6 GB only to be told
-    # that ffmpeg is missing.
+    # Before extraction, so a missing ffmpeg is reported without unpacking 6 GB first.
     ff = FFmpeg(
         ffmpeg_path=config.ffmpeg_path,
         ffprobe_path=config.ffprobe_path,
-        no_hwaccel=config.no_hwaccel,
+        software_encoding=config.software_encoding,
         crf=config.crf,
     )
-    # Only up front when the run is already fully determined by flags; in
-    # interactive mode the user may still deselect the steps that need them.
+    # Only when flags already settle the run; interactive may still deselect steps.
     if config.yes and not config.info:
         _check_external_tools(config, ff)
 
@@ -240,6 +245,10 @@ def run_pipeline(config: Config):
         file_stats = inspect_directory(extracted_dir)
 
     json_data = load_json_data(export_dir)
+    zone = load_zone(config.timezone)
+    if zone is not None:
+        json_data = localize(json_data, zone)
+        console.print(f"Timestamps converted to {config.timezone}")
     json_stats = count_json_stats(json_data)
 
     zip_names = [z.name for z in zips] if zips else None
@@ -256,7 +265,6 @@ def run_pipeline(config: Config):
         if response.strip().lower() == "n":
             _interactive_select(config, console)
 
-    # Re-check after the interactive selection, which may have changed what runs
     _check_external_tools(config, ff)
 
     # The fingerprint makes a run with different filters start from scratch.
@@ -279,7 +287,7 @@ def run_pipeline(config: Config):
         console.print(f"Fixed {len(renamed)} unknown files")
         scan = scan_export(export_dir)
 
-    # Runs before encoding so duplicates are never encoded twice
+    # Before encoding, so duplicates are never encoded twice.
     dup_alias: dict[str, str] = {}
     if config.should_dedup():
         console.rule("[bold yellow]Step 8: Dedup[/bold yellow]")
@@ -298,53 +306,55 @@ def run_pipeline(config: Config):
             checkpoint.store_dup_alias(dup_alias)
             checkpoint.complete_step("dedup")
 
-    # Also before encoding: voice messages become MP3, not H.265
+    selection = config.selection
+
+    # Also before encoding: voice messages become MP3, not H.265. They arrive as
+    # MP4 without a picture, so every video has to be opened to tell them apart.
     voice_files: list[Path] = []
-    if config.should_process_media():
+    if selection.needs_voice_detection:
         console.rule("[bold yellow]Step 9: Voice Check[/bold yellow]")
         video_paths = [mf.path for mf in scan.all_media if mf.is_video]
         voice_files = detect_voice_messages(video_paths, ff)
         console.print(f"Detected {len(voice_files)} voice messages")
-        # Remove voice messages from scan so they don't get encoded
+        # Out of the scan either way, so they are never encoded as video.
         voice_set = set(voice_files)
         scan.memories = [mf for mf in scan.memories if mf.path not in voice_set]
         scan.chat_media = [mf for mf in scan.chat_media if mf.path not in voice_set]
+    voice_files = [f for f in voice_files if _voice_wanted(f, selection)]
 
-    file_index: list[dict] = []
-    if config.should_process_media():
-        console.rule("[bold yellow]Step 10: Organize[/bold yellow]")
+    console.rule("[bold yellow]Step 10: Organize[/bold yellow]")
 
-        files_to_organize = []
-        if not config.has_only_filter or config.only_media or config.only_memories:
-            files_to_organize.extend(scan.memories)
-        if not config.has_only_filter or config.only_media or config.only_chat_media:
-            files_to_organize.extend(scan.chat_media)
+    files_to_organize = []
+    if selection.wants_source("memories"):
+        files_to_organize.extend(scan.memories)
+    if selection.wants_source("chat"):
+        files_to_organize.extend(scan.chat_media)
 
-        if config.only_photos:
-            files_to_organize = [f for f in files_to_organize if f.is_image]
-        elif config.only_videos:
-            files_to_organize = [f for f in files_to_organize if f.is_video]
+    if not selection.wants_type("photos"):
+        files_to_organize = [f for f in files_to_organize if not f.is_image]
+    if not selection.wants_type("videos"):
+        files_to_organize = [f for f in files_to_organize if not f.is_video]
 
-        if config.since or config.until:
-            before = len(files_to_organize)
-            files_to_organize = [f for f in files_to_organize if config.in_date_range(f.date)]
-            console.print(f"Date range keeps {len(files_to_organize)} of {before} files")
+    if config.since or config.until:
+        before = len(files_to_organize)
+        files_to_organize = [f for f in files_to_organize if config.in_date_range(f.date)]
+        console.print(f"Date range keeps {len(files_to_organize)} of {before} files")
 
-        file_index = organize_into_folders(
-            files_to_organize, output_dir,
-            folder_structure=config.folder_structure,
-            dry_run=config.dry_run,
-            checkpoint=checkpoint,
-        )
-        console.print(f"Organized {len(file_index)} files")
-        checkpoint.flush()
+    file_index = organize_into_folders(
+        files_to_organize, output_dir,
+        folder_structure=config.folder_structure,
+        dry_run=config.dry_run,
+        checkpoint=checkpoint,
+    )
+    console.print(f"Organized {len(file_index)} files")
+    checkpoint.flush()
 
-    if voice_files and config.should_process_media():
+    if voice_files:
         console.rule("[bold yellow]Step 11: Voice Convert[/bold yellow]")
-        from .scanner import MediaFile
+        from .read.scanner import MediaFile
         voice_media = []
         for vf in voice_files:
-            from .utils import extract_date_from_filename
+            from .filenames import extract_date_from_filename
             date = extract_date_from_filename(vf.name) or "unknown"
             voice_media.append(MediaFile(
                 path=vf, date=date, uuid=None, ext=".mp4",
@@ -402,30 +412,27 @@ def run_pipeline(config: Config):
                 console.print(f"Wrote GPS to {written} images")
             checkpoint.complete_step("exif")
 
-    if config.should_process_media() and file_index:
+    if file_index:
         console.rule("[bold yellow]Step 15: File dates[/bold yellow]")
         if not _done_already(checkpoint, "filetimes"):
             touched = apply_file_times(file_index, dry_run=config.dry_run)
             console.print(f"Set the file date on {touched} files")
             checkpoint.complete_step("filetimes")
 
-    # Step 15a: Manifest, records what ended up in the output folder so later
-    # runs and `merge` can still tell where each file came from.
     own_username = _own_username(json_data)
     if file_index:
         media_map = build_media_id_map(file_index, dup_alias)
-        # Persist the resolved IDs so a later --only-conversations run keeps the
-        # media that dedup pointed at a different copy
+        # Persisted, so a later narrowed run keeps the media dedup pointed elsewhere.
         attach_media_ids(file_index, media_map)
         write_manifest(
             output_dir, file_index,
             own_username=own_username,
             sources=[z.name for z in zips] if zips else [],
+            timezone_name=config.timezone,
             dry_run=config.dry_run,
         )
     else:
-        # Media was skipped this run (e.g. --only-conversations): fall back to
-        # the manifest of a previous run so media can still be resolved.
+        # Nothing copied this run, so an earlier manifest still resolves the media.
         existing = load_manifest(output_dir)
         if existing:
             file_index = manifest_to_file_index(existing, output_dir)
@@ -433,66 +440,32 @@ def run_pipeline(config: Config):
                 console.print(f"Loaded {len(file_index)} files from existing manifest")
         media_map = build_media_id_map(file_index, dup_alias)
 
-    # Before the conversations, they embed the same previews as the gallery
+    # The app embeds these, so they come before the pages.
     thumbs: dict[int, str] = {}
-    if file_index and (config.should_index() or config.should_process_conversations()):
+    if file_index:
         console.rule("[bold yellow]Step 16: Thumbnails[/bold yellow]")
+        attach_media_info(file_index, ff=ff if ff.check() else None, verbose=config.verbose)
         thumbs = build_thumbnails(file_index, output_dir, ff=ff if ff.check() else None,
                                   dry_run=config.dry_run, verbose=config.verbose)
 
-    if config.should_process_conversations():
-        console.rule("[bold yellow]Step 17: Conversations[/bold yellow]")
-        if not _done_already(checkpoint, "conversations"):
-            conv_count = generate_conversations(
-                json_data, output_dir,
-                conversation_format=config.conversation_format,
-                conversations_for=config.conversations_for or None,
-                min_messages=config.conversations_min_messages,
-                media_map=media_map,
-                since=config.since,
-                until=config.until,
-                dry_run=config.dry_run,
-                verbose=config.verbose,
-            )
-            console.print(f"Generated {conv_count} conversation files")
-            checkpoint.complete_step("conversations")
+    console.rule("[bold yellow]Step 17: Snap Map[/bold yellow]")
+    if not _done_already(checkpoint, "map"):
+        if generate_map_html(json_data, output_dir, file_index=file_index or None,
+                             dry_run=config.dry_run):
+            console.print("Generated map.html")
+        checkpoint.complete_step("map")
 
-    if config.should_process_stats():
-        console.rule("[bold yellow]Step 18: Stats[/bold yellow]")
-        if not _done_already(checkpoint, "stats"):
-            generate_stats_html(
-                json_data, file_stats, output_dir,
-                categories=config.stats_only_categories or None,
-                dry_run=config.dry_run,
-            )
-            console.print("Generated stats.html")
-            if config.stats_format == "pdf" and not config.dry_run:
-                render_single(output_dir / "stats.html")
-            checkpoint.complete_step("stats")
-
-    if config.should_process_map():
-        console.rule("[bold yellow]Step 19: Snap Map[/bold yellow]")
-        if not _done_already(checkpoint, "map"):
-            if generate_map_html(json_data, output_dir, file_index=file_index or None, dry_run=config.dry_run):
-                console.print("Generated map.html")
-            checkpoint.complete_step("map")
-
-    if config.should_index() and file_index:
-        console.rule("[bold yellow]Step 20: Index[/bold yellow]")
-        if not _done_already(checkpoint, "index"):
-            generate_index_html(file_index, output_dir, json_data=json_data,
-                                dry_run=config.dry_run, thumbs=thumbs)
-            if config.index_format == "pdf":
-                generate_index_pdf(file_index, output_dir, json_data=json_data,
-                                   thumbs=thumbs, dry_run=config.dry_run)
-            checkpoint.complete_step("index")
+    console.rule("[bold yellow]Step 18: Pages[/bold yellow]")
+    if not _done_already(checkpoint, "index"):
+        generate_app(output_dir, json_data, file_index, file_stats,
+                     thumbs=thumbs, media_map=media_map, dry_run=config.dry_run)
+        checkpoint.complete_step("index")
 
     if config.should_process_meta():
         console.rule("[bold yellow]Step 21: Meta[/bold yellow]")
         if not _done_already(checkpoint, "meta"):
             meta_dir = output_dir / "_meta"
             if not config.dry_run:
-                # includes sticker PNGs and everything else Snapchat put there
                 json_src = export_dir / "json"
                 if json_src.is_dir():
                     meta_json = meta_dir / "json"
@@ -514,7 +487,7 @@ def run_pipeline(config: Config):
                 console.print("Copied raw metadata to _meta/")
             checkpoint.complete_step("meta")
 
-    if config.checksums and not config.dry_run and file_index:
+    if not config.no_checksums and not config.dry_run and file_index:
         console.rule("[bold yellow]Step 22: Checksums[/bold yellow]")
         _, computed = verify_folder(output_dir, hashes=True)
         if write_checksums(output_dir, computed):
@@ -531,10 +504,9 @@ def run_pipeline(config: Config):
     if zips and export_dir and "snapexport_" in str(export_dir):
         shutil.rmtree(export_dir, ignore_errors=True)
 
-    # Clean flag: drop the bulky raw HTML export but keep the manifest and the
-    # raw JSONs, without those a later `merge` cannot rebuild conversations,
-    # stats or the map.
-    if config.clean and not config.dry_run:
+    # A second rendering of what the JSONs already hold, read by nothing here and
+    # the bulky part. The manifest and the raw JSONs always stay.
+    if not config.keep_raw_html and not config.dry_run:
         meta_html = output_dir / "_meta" / "html"
         if meta_html.exists():
             freed = sum(f.stat().st_size for f in meta_html.rglob("*") if f.is_file())

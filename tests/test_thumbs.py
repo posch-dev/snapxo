@@ -1,8 +1,8 @@
 from conftest import write_image
 from PIL import Image
 
-from snapxo.indexer import build_file_details, build_print_index
-from snapxo.thumbs import THUMB_HEIGHT, build_thumbnails, thumb_dir
+from snapxo.media.thumbs import MEDIUM_SIZE, THUMB_HEIGHT, build_thumbnails, medium_dir, thumb_dir
+from snapxo.pages.gallery import build_file_details, build_print_index
 
 
 def _entry(output_dir, name, subfolder="2026", ftype="image", date="2026-05-01"):
@@ -33,6 +33,33 @@ def test_thumbnails_are_built_and_reused(output_dir):
     stamp = made.stat().st_mtime_ns
     assert build_thumbnails([entry], output_dir) == thumbs
     assert made.stat().st_mtime_ns == stamp
+
+
+def test_a_large_image_also_gets_a_print_size(output_dir):
+    entry = _entry(output_dir, "2026-05-01_0001.jpg")
+    write_image(output_dir / "2026" / "2026-05-01_0001.jpg", "red", size=(2000, 3000))
+
+    build_thumbnails([entry], output_dir, with_medium=True)
+
+    assert entry["medium"] == "_meta/thumbs/medium/2026__2026-05-01_0001.jpg"
+    made = medium_dir(output_dir) / "2026__2026-05-01_0001.jpg"
+    with Image.open(made) as img:
+        assert max(img.width, img.height) == MEDIUM_SIZE
+
+    stamp = made.stat().st_mtime_ns
+    build_thumbnails([entry], output_dir, with_medium=True)
+    assert made.stat().st_mtime_ns == stamp
+
+
+def test_a_small_image_gets_no_print_size(output_dir):
+    entry = _entry(output_dir, "2026-05-01_0001.jpg")
+    write_image(output_dir / "2026" / "2026-05-01_0001.jpg", "red", size=(800, 600))
+
+    build_thumbnails([entry], output_dir, with_medium=True)
+
+    # nothing to gain, the PDF embeds the original
+    assert "medium" not in entry
+    assert not list(medium_dir(output_dir).iterdir())
 
 
 def test_videos_are_skipped_without_ffmpeg(output_dir):
@@ -78,3 +105,14 @@ def test_the_print_index_carries_the_details_inline(output_dir):
     assert "my-group-chat" in page
     assert "2026-05-01 14:32" in page
     assert "1.2 KB" in page
+
+
+def test_print_sizes_are_only_built_when_asked_for(output_dir):
+    entry = _entry(output_dir, "2026-05-01_0001.jpg")
+    write_image(output_dir / "2026" / "2026-05-01_0001.jpg", "red", size=(2000, 3000))
+
+    # a normal run has no use for them, only `snapxo pdf` does
+    build_thumbnails([entry], output_dir)
+
+    assert "medium" not in entry
+    assert not medium_dir(output_dir).exists()

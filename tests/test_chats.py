@@ -1,8 +1,9 @@
 import json
 import re
 
-from snapxo.chats import build_chats_html, generate_chats_html, message_anchor
-from snapxo.conversations import generate_conversation_html, generate_conversations
+from snapxo.pages.chatlist import build_chats_html, generate_chats_html
+from snapxo.pages.conversations import generate_conversation_html, generate_conversations
+from snapxo.parts.shared import message_anchor
 
 
 def _records():
@@ -92,21 +93,35 @@ def test_messages_carry_an_anchor():
 
 
 def test_conversation_images_use_the_thumbnail_but_link_the_full_file():
-    from snapxo.conversations import _media_html
+    from snapxo.parts.messages import _media_html
 
     entry = {"subfolder": "2026", "new_name": "2026-05-04_0005.jpg", "type": "image",
-             "thumb": "_meta/thumbs/2026__2026-05-04_0005.jpg"}
+             "thumb": "_meta/thumbs/2026__2026-05-04_0005.jpg",
+             "medium": "_meta/thumbs/medium/2026__2026-05-04_0005.jpg"}
 
     html = _media_html(entry)
     assert 'src="../_meta/thumbs/2026__2026-05-04_0005.jpg"' in html
     assert 'href="../2026/2026-05-04_0005.jpg"' in html
 
-    # the PDF prints the image far larger than a chat bubble, so it keeps the original
+    # the PDF prints the image far larger than a chat bubble, so it takes the
+    # print size instead of the 320 px thumbnail
+    pdf = _media_html(entry, pdf_mode=True)
+    assert 'src="../_meta/thumbs/medium/2026__2026-05-04_0005.jpg"' in pdf
+    assert 'href="../2026/2026-05-04_0005.jpg"' in pdf
+
+
+def test_the_pdf_falls_back_to_the_original_without_a_print_size():
+    from snapxo.parts.messages import _media_html
+
+    # no "medium", the image was already small enough to embed untouched
+    entry = {"subfolder": "2026", "new_name": "2026-05-04_0005.jpg", "type": "image",
+             "thumb": "_meta/thumbs/2026__2026-05-04_0005.jpg"}
+
     assert 'src="../2026/2026-05-04_0005.jpg"' in _media_html(entry, pdf_mode=True)
 
 
 def test_an_image_without_a_thumbnail_falls_back_to_the_full_file():
-    from snapxo.conversations import _media_html
+    from snapxo.parts.messages import _media_html
 
     entry = {"subfolder": "2026", "new_name": "2026-05-04_0005.jpg", "type": "image"}
 

@@ -2,9 +2,9 @@ from pathlib import Path
 
 from conftest import write_image
 
-from snapxo.checkpoint import Checkpoint
-from snapxo.organizer import organize_into_folders
-from snapxo.scanner import MediaFile
+from snapxo.archive.checkpoint import Checkpoint
+from snapxo.media.organizer import organize_into_folders
+from snapxo.read.scanner import MediaFile
 
 
 def media(tmp_path: Path, name: str, date: str, source: str = "memory", ext: str = ".jpg"):
