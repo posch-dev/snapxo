@@ -1,0 +1,11 @@
+# Written by `snapxo docker`. Serves the archive read-only over HTTP.
+services:
+  snapxo:
+    image: nginx:alpine
+    container_name: snapxo
+    restart: unless-stopped
+    ports:
+      - "__PORT__:80"
+    volumes:
+      - __ARCHIVE__:/usr/share/nginx/html:ro
+__AUTH_VOLUMES__
