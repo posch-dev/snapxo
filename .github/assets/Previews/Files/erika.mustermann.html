@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat: erika.mustermann</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; color: #fff; padding: 20px; max-width: 700px; margin: 0 auto; }
+h1 { text-align: center; margin: 20px 0 10px; color: #FFFE00; font-size: 20px; }
+.subtitle { text-align: center; color: #888; margin-bottom: 20px; font-size: 14px; }
+.sender { font-weight: 700; font-size: 14px; margin-top: 16px; padding-top: 8px; }
+hr { border: none; border-top: 1px solid; margin: 2px 0 6px; }
+.msg { padding: 4px 0; font-size: 15px; line-height: 1.4; }
+.ts { color: #888; font-size: 11px; margin-left: 8px; }
+.ts-inline { color: inherit; font-size: inherit; }
+.msg-media-link { margin: 6px 0; font-size: 13px; word-break: break-all; }
+.damaged-note { color: #c9a227; font-size: 11px; margin-top: 2px; }
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
+.system-msg { text-align: center; color: #888; font-size: 13px; padding: 8px 0; font-style: italic; }
+.media { color: #aaa; }
+.snap { color: #aaa; }
+.msg-media { margin: 6px 0; }
+.media-facts { display: none; }
+.media-still { display: none; }
+.msg-media img { max-width: 100%; max-height: 400px; border-radius: 8px; display: block; }
+.msg-media video { max-width: 100%; max-height: 400px; border-radius: 8px; display: block; }
+.msg-media audio { width: 100%; margin: 4px 0; }
+.collapsed { background: #111; border-radius: 8px; padding: 10px 14px; margin: 8px 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.collapsed:hover { background: #1a1a1a; }
+.collapsed-label { color: #ccc; font-size: 13px; }
+.collapsed-toggle { color: #888; font-size: 12px; }
+a { color: #FFFE00; }
+.back-link { text-align: center; margin-bottom: 20px; }
+@media print {
+    body { background: #fff; color: #000; max-width: none; padding: 0; }
+    .sender { color: var(--sender-print) !important; }
+    hr { border-color: var(--sender-print) !important; opacity: 0.55 !important; }
+    .ts { color: #666; }
+    .system-msg { color: #666; }
+    a { color: #333; }
+    /* Media on the left, its details in a box beside it. */
+    .msg-media { break-inside: avoid; display: flex; align-items: flex-start; gap: 5mm; margin: 3mm 0; }
+    .msg-media a, .media-still { flex: 0 1 auto; max-width: 62%; }
+    .msg-media img { max-height: 90mm; width: auto; border-radius: 2mm; }
+    .media-still { display: inline-block; position: relative; }
+    .media-still.empty { display: flex; align-items: center; justify-content: center; width: 34mm; height: 26mm; background: #f0f0f0; border: 0.5pt solid #ccc; border-radius: 2mm; font-size: 16pt; color: #888; }
+    .play-mark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 11mm; height: 11mm; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; font-size: 12pt; display: flex; align-items: center; justify-content: center; }
+    .media-facts { display: block; flex: 1 1 auto; border-left: 0.5pt solid #ccc; padding-left: 4mm; }
+    .media-facts dl { display: grid; grid-template-columns: 20mm 1fr; gap: 0.6mm 2mm; font-size: 7.5pt; }
+    .media-facts dt { color: #777; }
+    .media-facts dd { color: #222; word-break: break-word; }
+    .no-print { display: none; }
+}
+
+.date-format-picker { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #888; }
+.date-format-picker select {
+    background: #2a2a2a; color: #e0e0e0; border: 1px solid #555; border-radius: 6px;
+    padding: 5px 8px; font-size: 12px; font-family: inherit; cursor: pointer;
+}
+.date-format-picker select:hover { border-color: #888; }
+@media print { .date-format-picker { display: none; } }
+
+
+.pdf-cover { display: none; }
+@media print {
+  .pdf-cover { display: block; break-after: page; padding: 24mm 0 0; }
+  .cover-title { font-size: 26px; color: #000; text-align: left; margin: 0 0 6px; }
+  .cover-subtitle { font-size: 14px; color: #444; margin: 0 0 28px; }
+  .cover-facts { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-bottom: 28px; }
+  .cover-facts th { text-align: left; font-weight: 400; color: #666; padding: 5px 14px 5px 0; background: none; border: none; white-space: nowrap; vertical-align: top; width: 34mm; }
+  .cover-facts td { color: #000; padding: 5px 0; border: none; word-break: break-word; }
+  .cover-note { font-size: 11px; color: #444; line-height: 1.5; border-left: 2px solid #bbb; padding-left: 10px; margin-bottom: 24px; }
+  .cover-tool { font-size: 10px; color: #888; }
+}
+
+</style>
+</head>
+<body>
+<div class="top-bar no-print">
+<span class="back-link"><a href="../index.html">&larr; Back</a></span>
+<span class="date-format-picker no-print"><label for="date-format-select">Date formatting</label><select id="date-format-select"><option value="iso">YYYY-MM-DD</option><option value="dmy">DD.MM.YYYY</option><option value="mdy">MM/DD/YYYY</option><option value="dmonthy">DD Month YYYY</option><option value="monthdy">Month DD, YYYY</option></select></span>
+</div>
+
+<h1 class="no-print">Chat: erika.mustermann</h1>
+<p class="subtitle no-print">66 messages</p>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m0" class="msg"><span class="ts" data-date="2024-07-28" data-time="11:46">2024-07-28 11:46</span></div>
+<div class="msg-media"><a href="../2024/2024-07-28_0001.png" target="_blank"><img src="../_meta/thumbs/2024__2024-07-28_0001.jpg" loading="lazy" alt="2024/2024-07-28_0001.png"></a></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m1" class="msg">just now <span class="ts" data-date="2024-10-30" data-time="10:43">2024-10-30 10:43</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m2" class="msg"><span class="ts" data-date="2025-04-16" data-time="20:42">2025-04-16 20:42</span></div>
+<div class="msg-media"><a href="../2025/2025-04-16_0001.png" target="_blank"><img src="../_meta/thumbs/2025__2025-04-16_0001.jpg" loading="lazy" alt="2025/2025-04-16_0001.png"></a></div>
+<div id="m3" class="msg"><span class="ts" data-date="2025-08-03" data-time="11:05">2025-08-03 11:05</span></div>
+<div class="msg-media"><a href="../2025/2025-08-03_0003.png" target="_blank"><img src="../_meta/thumbs/2025__2025-08-03_0003.jpg" loading="lazy" alt="2025/2025-08-03_0003.png"></a></div>
+<div id="m4" class="msg">thats wild <span class="ts" data-date="2025-08-21" data-time="14:19">2025-08-21 14:19</span></div>
+<div id="m5" class="msg">thats wild <span class="ts" data-date="2026-04-30" data-time="14:13">2026-04-30 14:13</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m6" class="msg">morning <span class="ts" data-date="2026-07-17" data-time="15:44">2026-07-17 15:44</span></div>
+<div class="collapsed" onclick="this.classList.toggle('open')">
+        <span class="collapsed-label">&#128248; 4 Snaps (<span class="ts-inline" data-date="2026-07-20" data-time="09:40">2026-07-20 09:40</span> - <span class="ts-inline" data-date="2026-07-20" data-time="09:46">2026-07-20 09:46</span>)</span>
+        <span class="collapsed-toggle">[expand]</span>
+    </div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m11" class="msg">morning <span class="ts" data-date="2026-07-20" data-time="16:55">2026-07-20 16:55</span></div>
+<div class="collapsed" onclick="this.classList.toggle('open')">
+        <span class="collapsed-label">&#128248; 3 Snaps (<span class="ts-inline" data-date="2026-07-22" data-time="12:56">2026-07-22 12:56</span> - <span class="ts-inline" data-date="2026-07-22" data-time="13:00">2026-07-22 13:00</span>)</span>
+        <span class="collapsed-toggle">[expand]</span>
+    </div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m15" class="msg">did you sleep at all <span class="ts" data-date="2026-07-22" data-time="18:56">2026-07-22 18:56</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m16" class="msg">like four hours <span class="ts" data-date="2026-07-22" data-time="19:21">2026-07-22 19:21</span></div>
+<div class="collapsed" onclick="this.classList.toggle('open')">
+        <span class="collapsed-label">&#128248; 6 Snaps (<span class="ts-inline" data-date="2026-07-23" data-time="10:12">2026-07-23 10:12</span> - <span class="ts-inline" data-date="2026-07-23" data-time="10:22">2026-07-23 10:22</span>)</span>
+        <span class="collapsed-toggle">[expand]</span>
+    </div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m23" class="msg">why <span class="ts" data-date="2026-07-23" data-time="23:25">2026-07-23 23:25</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m24" class="msg">kept thinking about that thing at work <span class="ts" data-date="2026-07-23" data-time="23:30">2026-07-23 23:30</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m25" class="msg">the meeting? <span class="ts" data-date="2026-07-23" data-time="23:51">2026-07-23 23:51</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m26" class="msg">yeah <span class="ts" data-date="2026-07-23" data-time="23:55">2026-07-23 23:55</span></div>
+<div class="collapsed" onclick="this.classList.toggle('open')">
+        <span class="collapsed-label">&#128248; 2 Snaps (<span class="ts-inline" data-date="2026-07-24" data-time="08:51">2026-07-24 08:51</span> - <span class="ts-inline" data-date="2026-07-24" data-time="08:53">2026-07-24 08:53</span>)</span>
+        <span class="collapsed-toggle">[expand]</span>
+    </div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m29" class="msg">it went fine though <span class="ts" data-date="2026-07-25" data-time="11:12">2026-07-25 11:12</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m30" class="msg">i know but my brain doesnt <span class="ts" data-date="2026-07-25" data-time="11:29">2026-07-25 11:29</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m31" class="msg">classic <span class="ts" data-date="2026-07-25" data-time="11:46">2026-07-25 11:46</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m32" class="msg">what are you up to <span class="ts" data-date="2026-07-25" data-time="12:01">2026-07-25 12:01</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m33" class="msg">nothing yet <span class="ts" data-date="2026-07-25" data-time="12:06">2026-07-25 12:06</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m34" class="msg"><span class="ts" data-date="2026-07-25" data-time="12:09">2026-07-25 12:09</span></div>
+<div class="msg-media"><audio src="../2026/2026-07-25_0004.mp3" controls preload="metadata"></audio></div>
+<div id="m35" class="msg">want to do something later <span class="ts" data-date="2026-07-25" data-time="12:12">2026-07-25 12:12</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m36" class="msg">maybe <span class="ts" data-date="2026-07-29" data-time="17:27">2026-07-29 17:27</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m37" class="msg">very enthusiastic <span class="ts" data-date="2026-07-29" data-time="17:35">2026-07-29 17:35</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m38" class="msg">im still in bed leave me alone <span class="ts" data-date="2026-07-29" data-time="18:01">2026-07-29 18:01</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m39" class="msg">its almost noon <span class="ts" data-date="2026-07-29" data-time="18:18">2026-07-29 18:18</span></div>
+<div class="system-msg">CALLENDEDAUDIO <span class="ts" data-date="2026-07-30" data-time="03:04">2026-07-30 03:04</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m41" class="msg">and? <span class="ts" data-date="2026-07-31" data-time="18:48">2026-07-31 18:48</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m42" class="msg">no judgement <span class="ts" data-date="2026-08-01" data-time="22:31">2026-08-01 22:31</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m43" class="msg">sounds like judgement <span class="ts" data-date="2026-08-03" data-time="00:06">2026-08-03 00:06</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m44" class="msg">slight judgement <span class="ts" data-date="2026-08-03" data-time="00:11">2026-08-03 00:11</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m45" class="msg">ok im getting up <span class="ts" data-date="2026-08-03" data-time="00:21">2026-08-03 00:21</span></div>
+<div class="collapsed" onclick="this.classList.toggle('open')">
+        <span class="collapsed-label">&#128248; 2 Snaps (<span class="ts-inline" data-date="2026-08-03" data-time="03:52">2026-08-03 03:52</span> - <span class="ts-inline" data-date="2026-08-03" data-time="03:54">2026-08-03 03:54</span>)</span>
+        <span class="collapsed-toggle">[expand]</span>
+    </div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m48" class="msg">proud of you <span class="ts" data-date="2026-08-03" data-time="22:06">2026-08-03 22:06</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m49" class="msg">dont <span class="ts" data-date="2026-08-03" data-time="22:09">2026-08-03 22:09</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m50" class="msg">too late <span class="ts" data-date="2026-08-04" data-time="20:32">2026-08-04 20:32</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m51" class="msg"><span class="ts" data-date="2026-08-04" data-time="20:33">2026-08-04 20:33</span></div>
+<div class="msg-media"><audio src="../2026/2026-08-04_0006.mp3" controls preload="metadata"></audio></div>
+<div class="collapsed" onclick="this.classList.toggle('open')">
+        <span class="collapsed-label">&#128222; 2 Calls (<span class="ts-inline" data-date="2026-08-06" data-time="01:41">2026-08-06 01:41</span> - <span class="ts-inline" data-date="2026-08-08" data-time="10:36">2026-08-08 10:36</span>)</span>
+        <span class="collapsed-toggle">[expand]</span>
+    </div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m54" class="msg">i made breakfast at least <span class="ts" data-date="2026-08-08" data-time="17:48">2026-08-08 17:48</span></div>
+<div id="m55" class="msg"><span class="ts" data-date="2026-08-08" data-time="17:50">2026-08-08 17:50</span></div>
+<div class="msg-media"><a href="../2026/2026-08-08_0009.png" target="_blank"><img src="../_meta/thumbs/2026__2026-08-08_0009.jpg" loading="lazy" alt="2026/2026-08-08_0009.png"></a></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m56" class="msg">breakfast in bed AND fifa <span class="ts" data-date="2026-08-08" data-time="17:53">2026-08-08 17:53</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m57" class="msg">multitasking <span class="ts" data-date="2026-08-10" data-time="18:30">2026-08-10 18:30</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m58" class="msg">youre winning at life <span class="ts" data-date="2026-08-10" data-time="18:42">2026-08-10 18:42</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m59" class="msg">im losing 3-0 actually <span class="ts" data-date="2026-08-10" data-time="18:58">2026-08-10 18:58</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m60" class="msg">ok not winning at fifa <span class="ts" data-date="2026-08-13" data-time="22:53">2026-08-13 22:53</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m61" class="msg">different game entirely <span class="ts" data-date="2026-08-13" data-time="23:03">2026-08-13 23:03</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m62" class="msg">how is clash going <span class="ts" data-date="2026-08-13" data-time="23:20">2026-08-13 23:20</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m63" class="msg">i hit 5000 trophies <span class="ts" data-date="2026-08-13" data-time="23:40">2026-08-13 23:40</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m64" class="msg">no way <span class="ts" data-date="2026-08-14" data-time="00:02">2026-08-14 00:02</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m65" class="msg"><span class="ts" data-date="2026-08-14" data-time="00:17">2026-08-14 00:17</span></div>
+<div class="msg-media"><a href="../2026/2026-08-13_0012.png" target="_blank"><img src="../_meta/thumbs/2026__2026-08-13_0012.jpg" loading="lazy" alt="2026/2026-08-13_0012.png"></a></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m66" class="msg">ok thats actually impressive <span class="ts" data-date="2026-08-14" data-time="00:24">2026-08-14 00:24</span></div>
+<div class="sender" style="--sender:#00BFFF; --sender-print:#005572; color:var(--sender)">erika.mustermann</div><hr style="--sender:#00BFFF; --sender-print:#005572; border-color:var(--sender); opacity:0.3">
+<div id="m67" class="msg">i know <span class="ts" data-date="2026-08-14" data-time="00:47">2026-08-14 00:47</span></div>
+<div class="sender" style="--sender:#FF0000; --sender-print:#720000; color:var(--sender)">Me (max.mustermann)</div><hr style="--sender:#FF0000; --sender-print:#720000; border-color:var(--sender); opacity:0.3">
+<div id="m68" class="msg">teach me your ways <span class="ts" data-date="2026-08-16" data-time="14:26">2026-08-16 14:26</span></div>
+<script>
+(function () {
+    "use strict";
+    var KEY = "snapxo.dateFormat";
+    var MONTHS = ["January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December"];
+    var fallback = null;  // used when localStorage is unavailable (some file:// setups)
+
+    function read() {
+        try {
+            return window.localStorage.getItem(KEY) || fallback || "iso";
+        } catch (e) {
+            return fallback || "iso";
+        }
+    }
+
+    function store(value) {
+        fallback = value;
+        try { window.localStorage.setItem(KEY, value); } catch (e) { /* session only */ }
+    }
+
+    // iso is "YYYY-MM-DD"; anything unparseable is returned untouched.
+    function format(iso, fmt) {
+        if (!iso) return "";
+        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+        if (!m) return iso;
+        var y = m[1], mo = m[2], d = m[3];
+        var monthName = MONTHS[parseInt(mo, 10) - 1] || mo;
+        switch (fmt || read()) {
+            case "dmy": return d + "." + mo + "." + y;
+            case "mdy": return mo + "/" + d + "/" + y;
+            case "dmonthy": return parseInt(d, 10) + " " + monthName + " " + y;
+            case "monthdy": return monthName + " " + parseInt(d, 10) + ", " + y;
+            default: return y + "-" + mo + "-" + d;
+        }
+    }
+
+    var listeners = [];
+
+    function applyAll(root) {
+        var fmt = read();
+        var nodes = (root || document).querySelectorAll("[data-date]");
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            var text = format(el.getAttribute("data-date"), fmt);
+            var time = el.getAttribute("data-time");
+            if (time) text += " " + time;
+            var suffix = el.getAttribute("data-suffix");
+            if (suffix) text += " " + suffix;
+            el.textContent = text;
+        }
+    }
+
+    function setFormat(value) {
+        store(value);
+        applyAll();
+        for (var i = 0; i < listeners.length; i++) {
+            try { listeners[i](value); } catch (e) { /* keep the others running */ }
+        }
+    }
+
+    window.SEODate = {
+        format: format,
+        current: read,
+        set: setFormat,
+        apply: applyAll,
+        onChange: function (cb) { listeners.push(cb); }
+    };
+
+    function init() {
+        var select = document.getElementById("date-format-select");
+        if (select) {
+            select.value = read();
+            select.addEventListener("change", function () { setFormat(this.value); });
+        }
+        applyAll();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+})();
+</script>
+</body>
+</html>

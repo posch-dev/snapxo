@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "snapxo"
 # Single source of truth is snapxo/__init__.py, see [tool.hatch.version]
 dynamic = ["version"]
-description = "Turn a Snapchat data export into a clean, browsable offline archive of media, chats, stats and maps."
+description = "Turn a Snapchat data export into an offline archive with a UI for desktop and phone: media, chats, statistics, maps, PDFs and spreadsheets."
 readme = "README.md"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
@@ -39,6 +39,15 @@ keywords = [
     "deduplication",
     "html-report",
     "pdf-export",
+    "spreadsheet",
+    "xlsx",
+    "excel",
+    "statistics",
+    "charts",
+    "snap-map",
+    "geolocation",
+    "docker",
+    "self-hosted",
     "cli",
 ]
 classifiers = [
@@ -70,6 +79,8 @@ dependencies = [
     "Pillow>=12.3.0",
     # the browser comes separately from `playwright install chromium`
     "playwright>=1.40",
+    # Windows ships no timezone database, so zoneinfo has nothing to read without this
+    "tzdata; platform_system == 'Windows'",
 ]
 
 [project.urls]
@@ -80,6 +91,10 @@ Issues = "https://github.com/posch-dev/snapxo/issues"
 [project.optional-dependencies]
 # ffmpeg/ffprobe binaries for systems without them, at the cost of hardware encoding
 ffmpeg = ["static-ffmpeg>=2.5"]
+# only for `snapxo docker`: password hashing and merging into an existing compose file
+docker = ["bcrypt>=4.0", "PyYAML>=6.0"]
+# only for `snapxo spreadsheet --format xlsx`, which writes real editable Excel charts
+spreadsheet = ["openpyxl>=3.1"]
 dev = ["pytest", "pytest-cov", "ruff", "mypy", "build", "twine"]
 
 [project.scripts]
@@ -91,10 +106,16 @@ path = "snapxo/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["snapxo"]
 
+# Lucide is ISC, which wants its notice in every copy, so the credits go into
+# the wheel and not only into the repository.
+[tool.hatch.build.targets.wheel.force-include]
+"THIRD-PARTY-NOTICES.md" = "snapxo/THIRD-PARTY-NOTICES.md"
+
 [tool.hatch.build.targets.sdist]
 # tests ship too, so the sdist can be verified without cloning the repo.
 # hatchling adds .gitignore on top of this and offers no way to opt out.
-include = ["snapxo", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+include = ["snapxo", "tests", "README.md", "DOCUMENTATION.md", "PREVIEW.md", "LICENSE",
+           "CHANGELOG.md", "THIRD-PARTY-NOTICES.md"]
 
 [tool.ruff]
 line-length = 120
@@ -111,12 +132,11 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # These build HTML, CSS and JS as string literals, where wrapping a line only
 # makes the generated markup harder to read.
-"snapxo/chats.py" = ["E501"]
-"snapxo/indexer.py" = ["E501"]
-"snapxo/stats.py" = ["E501"]
-"snapxo/snapmap.py" = ["E501"]
-"snapxo/conversations.py" = ["E501"]
-"snapxo/webassets.py" = ["E501"]
+"snapxo/app/*.py" = ["E501"]
+"snapxo/parts/*.py" = ["E501"]
+"snapxo/pages/*.py" = ["E501"]
+"snapxo/facts/provenance.py" = ["E501"]
+"snapxo/formats/plaingallery.py" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["snapxo"]
