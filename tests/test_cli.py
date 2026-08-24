@@ -107,12 +107,23 @@ def test_a_missing_input_path_is_rejected(runner, tmp_path: Path):
     assert "does not exist" in result.output
 
 
-def test_bare_arguments_fall_through_to_organize(runner, tmp_path: Path):
-    # `snapxo export.zip -o out` has to keep working without naming the command.
+def test_a_path_instead_of_a_command_is_refused(runner, tmp_path: Path):
+    # There used to be a fallback to organize, which made a typo look like a path.
     result = runner.invoke(main, [str(tmp_path)])
 
     assert result.exit_code != 0
-    assert "--output" in result.output
+    assert "is not a SnapXO command" in result.output
+    assert "snapxo organize" in result.output
+
+
+def test_an_unknown_command_names_the_way_out(runner):
+    result = runner.invoke(main, ["whatevr"])
+
+    assert result.exit_code != 0
+    assert "is not a SnapXO command" in result.output
+    assert "snapxo --help" in result.output
+    # no path, so no organize hint
+    assert "To organize it" not in result.output
 
 
 def test_every_organize_option_documents_itself(runner):
@@ -139,7 +150,6 @@ def test_defaults_are_shown_rather_than_written_into_the_text(runner):
 
     assert "[default: 23]" in result.output
     assert "[default: year]" in result.output
-    assert "[default: html]" in result.output
     # the old style, spelled into the help string, should be gone
     assert "(default: 23" not in result.output
 
@@ -149,3 +159,64 @@ def test_every_command_describes_what_it_does(runner):
         result = runner.invoke(main, [command, "--help"])
         assert result.exit_code == 0
         assert "Usage:" in result.output
+
+
+def test_no_meta_warns_and_stops_without_a_way_to_confirm(runner, export_dir: Path, tmp_path: Path):
+    # CliRunner has no terminal, which is also what a script or a CI job has.
+    result = runner.invoke(main, ["organize", str(export_dir), "-o", str(tmp_path / "out"),
+                                  "--no-meta"])
+
+    assert result.exit_code == 1
+    assert "can never be rebuilt" in result.output
+    assert "Pass -y if you meant it" in result.output
+    assert not (tmp_path / "out").exists()
+
+
+def test_no_meta_carries_on_with_yes(runner, export_dir: Path, tmp_path: Path):
+    out = tmp_path / "out"
+    result = runner.invoke(main, ["organize", str(export_dir), "-o", str(out),
+                                  "--no-meta", "-y", "--no-encode", "--no-overlay"])
+
+    assert result.exit_code == 0
+    assert "can never be rebuilt" in result.output
+    assert not (out / "_meta" / "json").exists()
+    assert (out / "index.html").is_file()
+
+
+def test_no_meta_on_a_dry_run_warns_but_never_asks(runner, export_dir: Path, tmp_path: Path):
+    result = runner.invoke(main, ["organize", str(export_dir), "--no-meta", "--dry-run",
+                                  "--no-encode", "--no-overlay"])
+
+    assert result.exit_code == 0
+    assert "can never be rebuilt" in result.output
+    assert "Nothing is written on a dry run" in result.output
+
+
+def test_info_is_a_command_not_a_flag(runner, export_dir: Path):
+    result = runner.invoke(main, ["info", str(export_dir)])
+
+    assert result.exit_code == 0
+    assert "Step 2: Inspect" in result.output or "Inspect" in result.output
+
+    gone = runner.invoke(main, ["organize", str(export_dir), "--info"])
+    assert gone.exit_code != 0
+    assert "No such option" in gone.output
+
+
+def test_info_needs_no_output_folder(runner, export_dir: Path):
+    result = runner.invoke(main, ["info", str(export_dir)])
+
+    assert "-o/--output is required" not in result.output
+
+
+def test_export_is_called_spreadsheet_now(runner, tmp_path: Path):
+    result = runner.invoke(main, ["export", str(tmp_path)])
+
+    assert result.exit_code != 0
+    assert "is not a SnapXO command" in result.output
+
+
+def test_the_spreadsheet_command_takes_an_output(runner):
+    from snapxo.cli import spreadsheet_command
+
+    assert any(param.name == "output" for param in spreadsheet_command.params)

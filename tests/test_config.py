@@ -1,20 +1,18 @@
+import pytest
+
 from snapxo.config import Config
+from snapxo.selection import SOURCES, TYPES, parse
 
 
 def test_a_plain_config_processes_everything():
     c = Config()
 
-    assert c.has_only_filter is False
-    assert c.should_process_media()
-    assert c.should_process_conversations()
-    assert c.should_process_stats()
-    assert c.should_process_map()
+    assert c.selection.is_everything
     assert c.should_process_meta()
     assert c.should_encode()
     assert c.should_overlay()
     assert c.should_exif()
     assert c.should_dedup()
-    assert c.should_index()
 
 
 def test_a_no_flag_turns_its_step_off():
@@ -22,47 +20,57 @@ def test_a_no_flag_turns_its_step_off():
     assert not Config(no_overlay=True).should_overlay()
     assert not Config(no_exif=True).should_exif()
     assert not Config(no_dedup=True).should_dedup()
-    assert not Config(no_index=True).should_index()
-    assert not Config(no_conversations=True).should_process_conversations()
-    assert not Config(no_stats=True).should_process_stats()
-    assert not Config(no_map=True).should_process_map()
     assert not Config(no_meta=True).should_process_meta()
 
 
-def test_only_conversations_skips_media_and_everything_else():
-    c = Config(only_conversations=True)
+def test_narrowing_the_media_never_costs_the_raw_export():
+    # It used to: any --only flag silently skipped _meta/json, killing rebuild.
+    assert Config(media_sources=["memories"]).should_process_meta()
+    assert Config(media_types=["photos"]).should_process_meta()
 
-    assert c.has_only_filter
-    assert c.should_process_conversations()
-    assert not c.should_process_media()
-    assert not c.should_process_stats()
-    assert not c.should_process_map()
+
+def test_an_empty_list_means_everything_on_that_axis():
+    c = Config()
+
+    assert all(c.selection.wants_source(name) for name in SOURCES)
+    assert all(c.selection.wants_type(name) for name in TYPES)
+
+
+def test_a_named_list_keeps_only_what_it_names():
+    c = Config(media_sources=["memories"], media_types=["photos", "voice"])
+
+    assert c.selection.wants_source("memories")
+    assert not c.selection.wants_source("chat")
+    assert c.selection.wants_type("photos")
+    assert c.selection.wants_type("voice")
+    assert not c.selection.wants_type("videos")
+
+
+def test_asking_for_photos_alone_skips_the_encoding_and_the_probing():
+    c = Config(media_types=["photos"])
+
     assert not c.should_encode()
-    assert not c.should_index()
+    # Telling a voice message from a video costs a probe of every video.
+    assert not c.selection.needs_voice_detection
 
 
-def test_only_filters_combine():
-    # One run can rebuild several outputs, which is what the PDF example relies on.
-    c = Config(only_conversations=True, only_stats=True)
-
-    assert c.should_process_conversations()
-    assert c.should_process_stats()
-    assert not c.should_process_map()
+def test_videos_or_voice_both_need_the_probe():
+    assert Config(media_types=["videos"]).selection.needs_voice_detection
+    assert Config(media_types=["voice"]).selection.needs_voice_detection
 
 
-def test_media_only_filters_keep_the_media_steps():
-    for kwargs in ({"only_media": True}, {"only_memories": True}, {"only_chat_media": True},
-                   {"only_photos": True}, {"only_videos": True}, {"only_voice": True}):
-        c = Config(**kwargs)
-        assert c.should_process_media(), kwargs
-        assert c.should_encode(), kwargs
+def test_the_parser_keeps_the_documented_order():
+    assert parse("voice,photos", TYPES, "--types") == ["photos", "voice"]
+    assert parse("  Chat , memories ", SOURCES, "--media") == ["memories", "chat"]
 
 
-def test_meta_is_never_written_when_a_filter_is_set():
-    # There is no --only-meta, so any filter means the raw copy is off.
-    assert not Config(only_stats=True).should_process_meta()
+def test_an_empty_value_parses_to_everything():
+    assert parse("", TYPES, "--types") == []
 
 
-def test_a_no_flag_wins_over_its_only_flag():
-    assert not Config(only_stats=True, no_stats=True).should_process_stats()
-    assert not Config(only_media=True, no_encode=True).should_encode()
+def test_an_unknown_name_says_what_is_allowed():
+    with pytest.raises(ValueError) as problem:
+        parse("audio", TYPES, "--types")
+
+    assert "audio" in str(problem.value)
+    assert "photos, videos, voice" in str(problem.value)
