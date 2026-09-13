@@ -102,3 +102,18 @@ def test_an_old_manifest_without_the_new_fields_still_loads(tmp_path):
 
     assert report.ok
     assert report.checked == 2
+
+
+def test_update_without_hash_still_writes_the_baseline(tmp_path):
+    from click.testing import CliRunner
+
+    from snapxo.cli import main
+
+    out, _ = _folder(tmp_path)
+    write_checksums(out, {"2026/2026-05-01_0001.jpg": "0" * 32})
+
+    CliRunner().invoke(main, ["verify", str(out), "--update"])
+
+    baseline = load_checksums(out)
+    assert len(baseline) == 2
+    assert "0" * 32 not in baseline.values()

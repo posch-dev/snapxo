@@ -365,7 +365,7 @@ def docker_command(folder, ask_password, no_auth, port, output, append_to, up, d
 @click.argument("folders", nargs=-1, required=True, type=click.Path(exists=True, file_okay=False))
 @click.option("--hash", "with_hash", is_flag=True,
               help="Read every file and compare it to the stored checksums (slow)")
-@click.option("--update", is_flag=True, help="Write the current state as the new baseline")
+@click.option("--update", is_flag=True, help="Write the current state as the new baseline, implies --hash")
 def verify_command(folders, with_hash, update):
     """Check a finished output folder against its manifest.
 
@@ -378,6 +378,8 @@ def verify_command(folders, with_hash, update):
     archives = resolve_many([Path(f) for f in folders])
     if not archives:
         raise SystemExit(1)
+    # A baseline is made of hashes.
+    with_hash = with_hash or update
 
     failed = False
     for path in archives:
