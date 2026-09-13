@@ -8,6 +8,8 @@ from click.testing import CliRunner
 from snapxo.cli import main
 from snapxo.formats.dockergen import (
     DEFAULT_PORT,
+    NGINX_CONF_FILE,
+    _template,
     build_compose,
     compose_command,
     compose_target,
@@ -44,6 +46,12 @@ def test_with_a_password_the_auth_files_are_mounted(archive: Path):
 
     assert "/etc/nginx/.htpasswd:ro" in compose
     assert "/etc/nginx/conf.d/default.conf:ro" in compose
+
+
+def test_the_password_file_is_never_served():
+    conf = _template(NGINX_CONF_FILE)
+
+    assert "location ~ /\\. {\n        deny all;" in conf
 
 
 def test_the_service_block_matches_the_template(archive: Path):
