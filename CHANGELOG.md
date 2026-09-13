@@ -4,6 +4,21 @@ All notable changes to SnapXO are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the version numbers
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-09-13
+
+### Changed
+
+- **`snapxo rebuild --timezone` switches the archive** to that zone. `html`,
+  `pdf` and `spreadsheet` use it from then on.
+- **`snapxo html` has no `--timezone` any more**, it uses the archive's zone.
+
+### Fixed
+
+- **PDFs use the archive timezone.** Chats, media details and stats.pdf were
+  in UTC, even when the cover page named another zone.
+- **`snapxo merge` keeps the timezone** of the newest archive. The merged
+  archive fell back to UTC.
+
 ## [2.0.1] - 2026-09-13
 
 ### Added
