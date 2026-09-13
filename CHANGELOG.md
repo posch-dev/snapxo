@@ -4,6 +4,42 @@ All notable changes to SnapXO are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the version numbers
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-09-13
+
+### Added
+
+- **Progress bars** for thumbnails and for PDF rendering, with the current
+  part, its size and the time left.
+- **`snapxo merge` points out PDFs** from before the merge, which it does not
+  update.
+
+### Changed
+
+- **PDFs come in parts of at most 110 MB**, each with its own cover page
+  naming the part, its range and the archive it came from:
+
+  ```
+  pdf/
+    stats.pdf
+    media-details/2025/media-details-2025-part-1-of-1.pdf
+    media-plain/2025/media-plain-2025-part-1-of-3.pdf
+    chats/anna.muster/anna.muster-part-1-of-2.pdf
+  ```
+
+  Running `snapxo pdf` on a 2.0.0 archive removes the old `media-details.pdf`,
+  `media-plain.pdf` and `chats/<chat>.pdf` once the new parts are written. A
+  run that fails leaves the previous PDFs untouched.
+- **Third party licenses** moved from `THIRD-PARTY-NOTICES.md` into the License
+  section of the README.
+- **DOCUMENTATION.md** rewritten as a short reference: every command with an
+  example and its flags.
+
+### Fixed
+
+- **Large archives render their PDFs** ([#1](https://github.com/posch-dev/snapxo/issues/1)).
+  `snapxo pdf` failed with "Cannot create a string longer than 0x1fffffe8
+  characters" once a media PDF got too big.
+
 ## [2.0.0] - 2026-08-24
 
 ### Added
