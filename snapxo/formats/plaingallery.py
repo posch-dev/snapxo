@@ -41,10 +41,12 @@ def _piece(entry: dict, preview: str | None) -> str:
             f'<span class="file">{name}</span></figcaption></figure>')
 
 
-def build_plain_gallery(file_index: list[dict], previews: dict[int, str], cover: str = "") -> str:
+def build_plain_gallery(file_index: list[dict], previews: dict[int, str], cover: str = "",
+                        positions: list[int] | None = None) -> str:
     # previews holds the 1280 px copy where there is one, the thumbnail otherwise.
     by_year: dict[str, list[str]] = {}
-    for position, entry in enumerate(file_index):
+    for position in positions if positions is not None else range(len(file_index)):
+        entry = file_index[position]
         year = str(entry.get("subfolder") or entry.get("year") or "unknown")[:4]
         by_year.setdefault(year, []).append(_piece(entry, previews.get(position)))
 

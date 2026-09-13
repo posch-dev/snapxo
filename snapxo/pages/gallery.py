@@ -164,24 +164,26 @@ def build_print_index(
     details: dict[str, dict],
     thumbs: dict[int, str] | None = None,
     cover: str = "",
+    positions: list[int] | None = None,
 ) -> str:
     # No scripts and never lazy, or the PDF comes out without images.
     thumbs = thumbs or {}
+    chosen = [(i, file_index[i]) for i in positions] if positions is not None else list(enumerate(file_index))
 
     by_year: dict[str, list[tuple[int, dict]]] = defaultdict(list)
-    for i, f in enumerate(file_index):
+    for i, f in chosen:
         by_year[f.get("subfolder", f.get("year", "unknown"))].append((i, f))
 
-    n_vid = sum(1 for f in file_index if f.get("type") == "video")
-    n_img = sum(1 for f in file_index if f.get("type") == "image")
-    n_aud = sum(1 for f in file_index if f.get("type") == "audio")
+    n_vid = sum(1 for _, f in chosen if f.get("type") == "video")
+    n_img = sum(1 for _, f in chosen if f.get("type") == "image")
+    n_aud = sum(1 for _, f in chosen if f.get("type") == "audio")
 
     parts = ['<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
              '<title>Snapchat Memories</title>\n<style>' + PRINT_CSS + COVER_CSS +
              '</style>\n</head>\n<body>\n']
     parts.append(cover)
     parts.append('<h1>Snapchat Memories</h1>\n')
-    parts.append(f'<div class="summary">{len(file_index)} files, {n_img} images, '
+    parts.append(f'<div class="summary">{len(chosen)} files, {n_img} images, '
                  f'{n_vid} videos, {n_aud} voice messages</div>\n')
 
     type_labels = {"image": "Image", "video": "Video", "audio": "Voice message"}
