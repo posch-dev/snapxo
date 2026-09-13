@@ -1,6 +1,9 @@
 # A compose file that serves a finished folder over HTTP with nginx and a
 # read-only mount.
 
+import difflib
+import json
+import re
 import shutil
 import socket
 import subprocess
@@ -101,41 +104,114 @@ def service_block(archive: Path, port: int, with_auth: bool) -> dict:
     }
 
 
+def _service_lines(archive: Path, port: int, with_auth: bool, indent: str = "  ") -> list[str]:
+    # List items as JSON strings, valid YAML, so a path with spaces or colons stays one value.
+    block = service_block(archive, port, with_auth)
+    lines = [f"{indent}{SERVICE_NAME}:"]
+    for key, value in block.items():
+        if isinstance(value, list):
+            lines.append(f"{indent * 2}{key}:")
+            lines += [f"{indent * 3}- {json.dumps(item)}" for item in value]
+        else:
+            lines.append(f"{indent * 2}{key}: {value}")
+    return lines
+
+
+def _plain_service_yaml(archive: Path, port: int, with_auth: bool) -> str:
+    return "\n".join(_service_lines(archive, port, with_auth))
+
+
+def _is_top_level_key(line: str) -> bool:
+    return bool(line.strip()) and not line[0].isspace() and not line.startswith("#")
+
+
+def insert_service(text: str, archive: Path, port: int, with_auth: bool) -> str:
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if re.match(r"services:\s*(#.*)?$", line)), None)
+    if start is None:
+        if re.search(r"^services\s*:", text, re.MULTILINE):
+            return text
+        body = ["", "services:", *_service_lines(archive, port, with_auth)]
+        return newline.join(lines + body) + newline
+
+    end = next((i for i in range(start + 1, len(lines)) if _is_top_level_key(lines[i])), len(lines))
+    children = [line for line in lines[start + 1:end] if line.strip() and not line.lstrip().startswith("#")]
+    indent = children[0][:len(children[0]) - len(children[0].lstrip())] if children else "  "
+    block = _service_lines(archive, port, with_auth, indent)
+
+    existing = next((i for i in range(start + 1, end)
+                     if re.match(rf"{indent}{SERVICE_NAME}:\s*(#.*)?$", lines[i])), None)
+    if existing is not None:
+        # Its body is everything indented deeper, comments included.
+        stop = next((i for i in range(existing + 1, end)
+                     if lines[i].strip() and len(lines[i]) - len(lines[i].lstrip()) <= len(indent)), end)
+        while stop > existing + 1 and not lines[stop - 1].strip():
+            stop -= 1
+        lines[existing:stop] = block
+    else:
+        at = end
+        while at > start + 1 and not lines[at - 1].strip():
+            at -= 1
+        lines[at:at] = block
+    return newline.join(lines) + newline
+
+
+def _free_backup(path: Path) -> Path:
+    # An identical backup is reused, a different one never overwritten.
+    number = 1
+    while True:
+        candidate = path.with_name(path.name + (".bak" if number == 1 else f".bak.{number}"))
+        if not candidate.exists() or candidate.read_bytes() == path.read_bytes():
+            return candidate
+        number += 1
+
+
 def append_to_compose(existing: Path, archive: Path, port: int, with_auth: bool) -> bool:
-    # Never a text append: anchors and odd indentation would break the file.
+    # Inserted as text, so comments and layout survive, then parsed to prove the result.
     try:
         import yaml
     except ImportError:
         console.print("[yellow]--append needs PyYAML, which is not installed "
                       "(pip install snapxo[docker]).[/yellow]")
         console.print("Add this service to your compose file by hand instead:\n")
-        console.print(_plain_service_yaml(archive, port, with_auth))
+        console.print(_plain_service_yaml(archive, port, with_auth), markup=False, highlight=False, soft_wrap=True)
         return False
 
-    document = yaml.safe_load(existing.read_text(encoding="utf-8")) or {}
-    if not isinstance(document, dict):
-        console.print(f"[red]{existing} is not a compose file.[/red]")
+    original = existing.read_bytes().decode("utf-8")
+    try:
+        document = yaml.safe_load(original) or {}
+    except yaml.YAMLError as problem:
+        console.print(f"[red]{existing} is not valid YAML: {problem}[/red]")
         return False
-
-    services = document.setdefault("services", {})
-    if not isinstance(services, dict):
-        console.print(f"[red]{existing} has no usable services section.[/red]")
+    if not isinstance(document, dict) or not isinstance(document.get("services") or {}, dict):
+        console.print(f"[red]{existing} is not a compose file with a usable services section.[/red]")
         return False
-    if SERVICE_NAME in services:
+    if SERVICE_NAME in (document.get("services") or {}):
         console.print(f"[yellow]{existing} already has a '{SERVICE_NAME}' service, replacing it.[/yellow]")
 
-    services[SERVICE_NAME] = service_block(archive, port, with_auth)
-    existing.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
-    console.print(f"Added the '{SERVICE_NAME}' service to {existing}")
+    updated = insert_service(original, archive, port, with_auth)
+    expected = dict(document)
+    expected["services"] = {**(document.get("services") or {}),
+                            SERVICE_NAME: service_block(archive, port, with_auth)}
+    try:
+        matches = yaml.safe_load(updated) == expected
+    except yaml.YAMLError:
+        matches = False
+    if not matches:
+        console.print(f"[red]Could not add the service to {existing} without changing something else, "
+                      f"so it was left as it is.[/red] Add this by hand under services:\n")
+        console.print(_plain_service_yaml(archive, port, with_auth), markup=False, highlight=False, soft_wrap=True)
+        return False
+
+    backup = _free_backup(existing)
+    shutil.copy2(existing, backup)
+    existing.write_bytes(updated.encode("utf-8"))
+    console.print(f"Added the '{SERVICE_NAME}' service to {existing}, the previous version is {backup.name}")
+    diff = difflib.unified_diff(original.splitlines(), updated.splitlines(),
+                                backup.name, existing.name, lineterm="")
+    console.print("\n".join(diff), markup=False, highlight=False, soft_wrap=True)
     return True
-
-
-def _plain_service_yaml(archive: Path, port: int, with_auth: bool) -> str:
-    lines = [f"  {SERVICE_NAME}:", "    image: nginx:alpine",
-             f"    container_name: {SERVICE_NAME}", "    restart: unless-stopped",
-             "    ports:", f'      - "{port}:80"', "    volumes:"]
-    lines += [f"      - {volume}" for volume in service_block(archive, port, with_auth)["volumes"]]
-    return "\n".join(lines)
 
 
 def write_compose(

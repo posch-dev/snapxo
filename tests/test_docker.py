@@ -122,6 +122,65 @@ def test_appending_keeps_an_existing_compose_file_valid(archive: Path, tmp_path:
     assert document["services"]["snapxo"]["image"] == "nginx:alpine"
 
 
+COMPOSE_WITH_COMMENTS = """\
+# homelab stack, keep the order
+services:
+    traefik:
+        image: traefik:v3  # pinned on purpose
+#    wstunnel:
+#        image: ghcr.io/erebe/wstunnel
+
+volumes:
+    data: {}
+"""
+
+
+def test_appending_keeps_comments_and_commented_out_services(archive: Path, tmp_path: Path, capsys):
+    yaml = pytest.importorskip("yaml")
+    existing = tmp_path / "docker-compose.yml"
+    existing.write_text(COMPOSE_WITH_COMMENTS, encoding="utf-8")
+
+    assert write_compose(archive, append_to=existing, port=9000) is True
+
+    text = existing.read_text(encoding="utf-8")
+    assert "# homelab stack, keep the order" in text
+    assert "image: traefik:v3  # pinned on purpose" in text
+    assert "#    wstunnel:\n#        image: ghcr.io/erebe/wstunnel" in text
+    document = yaml.safe_load(text)
+    assert list(document["services"]) == ["traefik", "snapxo"]
+    assert document["volumes"] == {"data": {}}
+    assert (tmp_path / "docker-compose.yml.bak").read_text(encoding="utf-8") == COMPOSE_WITH_COMMENTS
+    assert '+        ports:' in capsys.readouterr().out
+
+
+def test_appending_again_replaces_only_the_snapxo_service(archive: Path, tmp_path: Path):
+    yaml = pytest.importorskip("yaml")
+    existing = tmp_path / "docker-compose.yml"
+    existing.write_text(COMPOSE_WITH_COMMENTS, encoding="utf-8")
+
+    write_compose(archive, append_to=existing, port=9000)
+    write_compose(archive, append_to=existing, port=9001)
+
+    text = existing.read_text(encoding="utf-8")
+    assert text.count("snapxo:") == 1
+    assert yaml.safe_load(text)["services"]["snapxo"]["ports"] == ["9001:80"]
+    assert "#    wstunnel:" in text
+    # the first backup is the untouched original
+    assert (tmp_path / "docker-compose.yml.bak").read_text(encoding="utf-8") == COMPOSE_WITH_COMMENTS
+    assert (tmp_path / "docker-compose.yml.bak.2").is_file()
+
+
+def test_a_file_it_cannot_edit_safely_is_left_alone(archive: Path, tmp_path: Path):
+    pytest.importorskip("yaml")
+    existing = tmp_path / "docker-compose.yml"
+    existing.write_text("services: {other: {image: alpine}}\n", encoding="utf-8")
+
+    assert write_compose(archive, append_to=existing) is False
+
+    assert existing.read_text(encoding="utf-8") == "services: {other: {image: alpine}}\n"
+    assert not (tmp_path / "docker-compose.yml.bak").exists()
+
+
 def test_the_default_port_is_7627():
     assert DEFAULT_PORT == 7627
 
