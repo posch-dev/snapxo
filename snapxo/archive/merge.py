@@ -334,6 +334,21 @@ def _validate(inputs: list[Path], output: Path):
             raise SystemExit(f"Input folder must not be inside the output folder ({input_dir}).")
 
 
+def _merged_zone(inputs: list[Path], timezone: str) -> str:
+    # Media names come from local dates, so a zone never changes without being asked.
+    zones = {input_dir: archive_zone(load_manifest(input_dir) or {}) for input_dir in inputs}
+    if timezone or len(set(zones.values())) == 1:
+        return timezone or next(iter(zones.values()))
+
+    console.print("[red]The archives use different timezones. Nothing has been written.[/red]")
+    for input_dir, zone in zones.items():
+        console.print(f"  {input_dir}: {zone}")
+    newest = zones[max(inputs, key=export_recency)]
+    console.print(f"Pick the zone of the merged archive with [cyan]--timezone ZONE[/cyan], "
+                  f"e.g. [cyan]--timezone {newest}[/cyan] from the newest.")
+    raise SystemExit(1)
+
+
 def _verify_transferred(records: list[dict], output: Path) -> list[str]:
     # Re-hashed before any source folder is deleted.
     problems = []
@@ -359,6 +374,7 @@ def merge_outputs(
     verify: bool = True,
     skip_damaged: bool = False,
     dry_run: bool = False,
+    timezone_name: str = "",
 ) -> int:
     console.rule("[bold yellow]Collect[/bold yellow]")
     if output is None:
@@ -373,6 +389,7 @@ def merge_outputs(
         return 0
     console.print(f"Merging {len(inputs)} folders")
     _validate(inputs, output)
+    zone_name = _merged_zone(inputs, timezone_name)
 
     records: list[dict] = []
     for input_dir in inputs:
@@ -493,12 +510,6 @@ def merge_outputs(
         basic = account.get("Basic Information", {})
         if isinstance(basic, dict):
             own_username = basic.get("Username")
-
-    zones = {input_dir: archive_zone(load_manifest(input_dir) or {}) for input_dir in inputs}
-    zone_name = zones[max(inputs, key=export_recency)]
-    if len(set(zones.values())) > 1:
-        console.print(f"[yellow]The inputs use {', '.join(sorted(set(zones.values())))}, the merged "
-                      f"archive takes {zone_name} from the newest.[/yellow]")
 
     # The exports behind every input, not the input folders themselves.
     sources = [source for input_dir in inputs for source in (load_manifest(input_dir) or {}).get("sources") or []]

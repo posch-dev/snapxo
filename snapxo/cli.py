@@ -157,9 +157,11 @@ def main():
               help="Check the input folders against their manifests before merging")
 @click.option("--skip-damaged", is_flag=True,
               help="With --no-verify: leave damaged files out instead of taking them along marked")
+@click.option("--timezone", default="", metavar="ZONE",
+              help="Timezone of the merged archive, needed when the inputs use different ones")
 @click.option("--dry-run", is_flag=True, help="Show what would happen, without it happening")
 def merge_command(folders, output, hardlink, delete_sources, yes, folder_structure,
-                  verify, skip_damaged, dry_run):
+                  verify, skip_damaged, timezone, dry_run):
     """Merge finished output folders into one.
 
     FOLDERS can be any number of output folders, or a parent folder holding
@@ -173,6 +175,7 @@ def merge_command(folders, output, hardlink, delete_sources, yes, folder_structu
     damaged. Only --dry-run works without -o.
     """
     _require_output(output, dry_run)
+    _check_timezone(timezone)
     if delete_sources and not verify:
         # Unchecked inputs plus deleted originals loses data for good.
         raise click.UsageError("--delete-sources cannot be combined with --no-verify")
@@ -193,6 +196,7 @@ def merge_command(folders, output, hardlink, delete_sources, yes, folder_structu
         verify=verify,
         skip_damaged=skip_damaged,
         dry_run=dry_run,
+        timezone_name=timezone,
     )
 
 

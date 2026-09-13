@@ -162,18 +162,39 @@ def test_pdfs_from_before_the_merge_are_pointed_out(tmp_path, capsys):
     assert "snapxo pdf" in capsys.readouterr().out
 
 
-def test_the_merged_archive_keeps_the_timezone_of_the_newest(tmp_path, capsys):
-    older = _output_folder(tmp_path, "older", {"2025-03-01_0001.jpg": ("red", "idone")}, "Europe/London")
-    newer = _output_folder(tmp_path, "newer", {"2026-05-02_0001.jpg": ("blue", "idtwo")}, "Europe/Vienna")
-    manifest = older / "_meta" / "manifest.json"
-    manifest.write_text(manifest.read_text(encoding="utf-8").replace('"generated": "2', '"generated": "1'),
-                        encoding="utf-8")
+def test_differing_timezones_stop_the_merge_before_anything_is_written(tmp_path, capsys):
+    london = _output_folder(tmp_path, "london", {"2025-03-01_0001.jpg": ("red", "idone")}, "Europe/London")
+    vienna = _output_folder(tmp_path, "vienna", {"2026-05-02_0001.jpg": ("blue", "idtwo")}, "Europe/Vienna")
     out = tmp_path / "merged"
 
-    merge_outputs([older, newer], out)
+    with pytest.raises(SystemExit):
+        merge_outputs([london, vienna], out)
+
+    assert not out.exists()
+    printed = capsys.readouterr().out
+    assert f"{london}: Europe/London" in printed
+    assert f"{vienna}: Europe/Vienna" in printed
+    assert "--timezone" in printed
+
+
+def test_timezone_decides_the_zone_of_the_merged_archive(tmp_path):
+    london = _output_folder(tmp_path, "london", {"2025-03-01_0001.jpg": ("red", "idone")}, "Europe/London")
+    vienna = _output_folder(tmp_path, "vienna", {"2026-05-02_0001.jpg": ("blue", "idtwo")}, "Europe/Vienna")
+    out = tmp_path / "merged"
+
+    merge_outputs([london, vienna], out, timezone_name="Europe/London")
+
+    assert load_manifest(out)["timezone"] == "Europe/London"
+
+
+def test_inputs_in_one_zone_need_no_timezone(tmp_path):
+    a = _output_folder(tmp_path, "a", {"2026-05-01_0001.jpg": ("red", "idone")}, "Europe/Vienna")
+    b = _output_folder(tmp_path, "b", {"2026-05-02_0001.jpg": ("blue", "idtwo")}, "Europe/Vienna")
+    out = tmp_path / "merged"
+
+    merge_outputs([a, b], out)
 
     assert load_manifest(out)["timezone"] == "Europe/Vienna"
-    assert "Europe/London, Europe/Vienna" in capsys.readouterr().out
 
 
 def _set_sources(folder, sources):
