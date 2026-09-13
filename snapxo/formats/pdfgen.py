@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from .. import __version__
-from ..archive.manifest import build_media_id_map, load_manifest, manifest_to_file_index
+from ..archive.manifest import build_media_id_map, load_archive
 from ..facts.mediacounts import summarize_folder
 from ..facts.provenance import archive_facts, cover_page, fact_rows
 from ..facts.series import build_series
@@ -14,7 +14,6 @@ from ..pages.conversations import generate_conversation_html, own_username_of, p
 from ..pages.gallery import build_file_details, build_print_index
 from ..pages.stats import generate_stats_html
 from ..parts.messages import _media_rel_path, resolve_media
-from ..read.inspector import load_json_data
 from ..snapchat import STATUS_TYPES
 from ..tools.browser import PdfRenderer
 from ..tools.deps import require_playwright
@@ -268,14 +267,10 @@ def render_pdfs(folder: Path, gallery: bool = True, stats: bool = True, chats: b
                 memories: bool = True, chats_with: list[str] | None = None,
                 min_messages: int = 1, stats_only: list[str] | None = None,
                 target: Path | None = None, dry_run: bool = False) -> bool:
-    manifest = load_manifest(folder)
-    if not manifest:
-        console.print(f"[red]{folder} has no _meta/manifest.json, so it is not a "
-                      f"folder SnapXO produced.[/red]")
+    archive = load_archive(folder)
+    if archive is None:
         return False
-
-    file_index = manifest_to_file_index(manifest, folder)
-    json_data = load_json_data(folder / "_meta")
+    _, file_index, json_data = archive
     # Only the finished files move, the pages stay in the archive where the media is.
     out_dir = target or pdf_dir(folder)
 

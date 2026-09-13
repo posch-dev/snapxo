@@ -2,7 +2,7 @@ import html
 from datetime import datetime
 from pathlib import Path
 
-from ..archive.manifest import load_manifest
+from ..archive.manifest import archive_zone, load_manifest
 from ..parts.shared import date_span, split_timestamp
 
 
@@ -18,7 +18,7 @@ def archive_facts(folder: Path, file_index: list[dict], series: dict) -> dict:
         "sources": [str(name) for name in manifest.get("sources", []) if name],
         "built": str(manifest.get("generated") or ""),
         "account": str(manifest.get("own_username") or ""),
-        "timezone": str(manifest.get("timezone") or "UTC"),
+        "timezone": archive_zone(manifest),
         "covered_from": min(starts) if starts else "",
         "covered_to": max(ends) if ends else "",
         "files": len(file_index),

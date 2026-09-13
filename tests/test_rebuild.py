@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 from snapxo import pipeline
+from snapxo.archive.manifest import load_manifest
 from snapxo.archive.rebuild import rebuild_folder
 from snapxo.config import Config
 
@@ -56,3 +57,13 @@ def test_rebuild_refuses_when_every_listed_file_is_gone(export_dir: Path, output
     shutil.rmtree(folder / "2026")
 
     assert rebuild_folder(folder) is False
+
+
+def test_rebuild_switches_the_archive_to_the_new_timezone(export_dir: Path, output_dir: Path):
+    folder = organized_folder(export_dir, output_dir)
+
+    assert rebuild_folder(folder, timezone="Europe/Vienna") is True
+
+    assert load_manifest(folder)["timezone"] == "Europe/Vienna"
+    assert rebuild_folder(folder) is True
+    assert load_manifest(folder)["timezone"] == "Europe/Vienna"

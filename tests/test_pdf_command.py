@@ -4,6 +4,7 @@ from pathlib import Path
 
 from snapxo import pipeline
 from snapxo.config import Config
+from snapxo.formats import pdfgen
 from snapxo.formats.pdfgen import pdf_dir, render_pdfs
 
 
@@ -120,3 +121,31 @@ def test_the_plain_gallery_names_the_file_under_the_picture():
 
     assert "2026-05-01_0001.jpg" in page
     assert "2026-05-01" in page
+
+
+def test_the_pdfs_show_the_archive_timezone(export_dir: Path, output_dir: Path, monkeypatch):
+    pipeline.run_pipeline(Config(inputs=[export_dir], output=output_dir, yes=True,
+                                 no_encode=True, no_overlay=True, timezone="Europe/Vienna"))
+    pages = []
+
+    class FakeRenderer:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def render(self, source, pdf_path, **_):
+            pages.append(source.read_text(encoding="utf-8"))
+            pdf_path.write_bytes(b"%PDF")
+            return True
+
+    monkeypatch.setattr(pdfgen, "require_playwright", lambda: None)
+    monkeypatch.setattr(pdfgen, "PdfRenderer", FakeRenderer)
+
+    assert render_pdfs(output_dir, gallery=False, memories=False, stats=False) is True
+
+    # friend_one wrote at 12:00 UTC, 14:00 in Vienna in May
+    chat = "".join(pages)
+    assert 'data-time="14:00"' in chat
+    assert 'data-time="12:00"' not in chat

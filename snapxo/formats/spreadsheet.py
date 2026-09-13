@@ -3,13 +3,11 @@ from pathlib import Path
 
 from rich.console import Console
 
-from ..archive.manifest import load_manifest, manifest_to_file_index
-from ..clock import load_zone, localize
+from ..archive.manifest import load_archive
 from ..facts.datasets import numbers_dataset, stats_datasets
 from ..facts.mediacounts import summarize_folder
 from ..facts.series import build_series
 from ..pages.stats import stat_card_values
-from ..read.inspector import load_json_data
 from .tables import file_name, write_csv_folder, write_ods, write_xlsx
 
 console = Console()
@@ -22,17 +20,10 @@ def spreadsheet_dir(folder: Path) -> Path:
 
 
 def collect_datasets(folder: Path) -> list[dict] | None:
-    manifest = load_manifest(folder)
-    if not manifest:
-        console.print(f"[red]{folder} has no _meta/manifest.json, so it is not a "
-                      f"folder SnapXO produced.[/red]")
+    archive = load_archive(folder)
+    if archive is None:
         return None
-
-    file_index = manifest_to_file_index(manifest, folder)
-    json_data = load_json_data(folder / "_meta")
-    zone = load_zone(str(manifest.get("timezone") or ""))
-    if zone is not None:
-        json_data = localize(json_data, zone)
+    _, file_index, json_data = archive
 
     series = build_series(json_data, file_index)
     file_stats = summarize_folder(folder, file_index)

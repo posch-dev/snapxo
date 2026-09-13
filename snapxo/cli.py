@@ -199,7 +199,7 @@ def merge_command(folders, output, hardlink, delete_sources, yes, folder_structu
 @main.command("rebuild")
 @click.argument("folder", type=click.Path(exists=True, file_okay=False))
 @click.option("--timezone", default="", metavar="ZONE",
-              help="Show timestamps in this timezone instead of the one stored in the archive")
+              help="Switch the archive to this timezone, every later command uses it too")
 @click.option("--dry-run", is_flag=True, help="Show what would happen, without it happening")
 @click.option("-v", "--verbose", is_flag=True, help="Print every file as it is processed")
 def rebuild_command(folder, timezone, dry_run, verbose):
@@ -226,11 +226,9 @@ def rebuild_command(folder, timezone, dry_run, verbose):
               help="Leave out conversations with fewer messages than this")
 @click.option("--stats-only", type=str, default=None, metavar="CAT,CAT",
               help="Only these statistics categories, by their JSON file name (e.g. account,friends)")
-@click.option("--timezone", default="", metavar="ZONE",
-              help="Show timestamps in this timezone instead of the one stored in the archive")
 @click.option("--dry-run", is_flag=True, help="Show what would happen, without it happening")
 @click.option("-v", "--verbose", is_flag=True, help="Print every file as it is processed")
-def html_command(folder, chats_with, min_messages, stats_only, timezone, dry_run, verbose):
+def html_command(folder, chats_with, min_messages, stats_only, dry_run, verbose):
     """Write the one page per topic versions beside index.html.
 
     gallery.html, chats.html, stats.html and one file per chat in
@@ -238,14 +236,12 @@ def html_command(folder, chats_with, min_messages, stats_only, timezone, dry_run
     a single page on without the rest of the archive. `snapxo pdf` renders the
     same thing for printing and takes the same three filters.
     """
-    _check_timezone(timezone)
     archive = resolve_one(Path(folder))
     if archive is None or not write_loose_pages(
         archive,
         chats_with=chats_with.split(",") if chats_with else None,
         min_messages=min_messages,
         stats_only=stats_only.split(",") if stats_only else None,
-        timezone=timezone,
         dry_run=dry_run,
         verbose=verbose,
     ):

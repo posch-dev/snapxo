@@ -3,12 +3,12 @@ import json
 import pytest
 from conftest import write_image
 
-from snapxo.archive.manifest import write_manifest
+from snapxo.archive.manifest import load_manifest, write_manifest
 from snapxo.archive.merge import merge_outputs
 from snapxo.archive.verify import load_checksums, load_integrity, write_checksums
 
 
-def _output_folder(root, name, files):
+def _output_folder(root, name, files, timezone_name=""):
     # files: {filename: (color, media_id)}
     folder = root / name
     file_index = []
@@ -19,7 +19,7 @@ def _output_folder(root, name, files):
             "type": "image", "ext": ".jpg", "source": "chat", "original_name": f"orig_{media_id}.jpg",
             "media_id": media_id, "media_ids": [media_id],
         })
-    write_manifest(folder, file_index)
+    write_manifest(folder, file_index, timezone_name=timezone_name)
     (folder / "_meta" / "json").mkdir(parents=True, exist_ok=True)
     (folder / "_meta" / "json" / "account.json").write_text(
         json.dumps({"Basic Information": {"Username": "testuser"}}), encoding="utf-8")
@@ -160,3 +160,17 @@ def test_pdfs_from_before_the_merge_are_pointed_out(tmp_path, capsys):
     merge_outputs([a, b], tmp_path / "merged")
 
     assert "snapxo pdf" in capsys.readouterr().out
+
+
+def test_the_merged_archive_keeps_the_timezone_of_the_newest(tmp_path, capsys):
+    older = _output_folder(tmp_path, "older", {"2025-03-01_0001.jpg": ("red", "idone")}, "Europe/London")
+    newer = _output_folder(tmp_path, "newer", {"2026-05-02_0001.jpg": ("blue", "idtwo")}, "Europe/Vienna")
+    manifest = older / "_meta" / "manifest.json"
+    manifest.write_text(manifest.read_text(encoding="utf-8").replace('"generated": "2', '"generated": "1'),
+                        encoding="utf-8")
+    out = tmp_path / "merged"
+
+    merge_outputs([older, newer], out)
+
+    assert load_manifest(out)["timezone"] == "Europe/Vienna"
+    assert "Europe/London, Europe/Vienna" in capsys.readouterr().out

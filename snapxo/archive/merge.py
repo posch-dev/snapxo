@@ -12,6 +12,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.progress import Progress
 
+from ..clock import load_zone, localize
 from ..filenames import extract_date_from_filename
 from ..files import file_hash
 from ..filetypes import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
@@ -19,7 +20,7 @@ from ..formats.pdfgen import pdf_dir
 from ..media.metadata import apply_file_times
 from ..pages.site import generate_site
 from ..read.inspector import load_json_data
-from .manifest import load_manifest, write_manifest
+from .manifest import archive_zone, load_manifest, write_manifest
 from .verify import load_checksums, print_report, verify_folder, write_checksums, write_integrity
 
 console = Console()
@@ -493,10 +494,17 @@ def merge_outputs(
         if isinstance(basic, dict):
             own_username = basic.get("Username")
 
+    zones = {input_dir: archive_zone(load_manifest(input_dir) or {}) for input_dir in inputs}
+    zone_name = zones[max(inputs, key=export_recency)]
+    if len(set(zones.values())) > 1:
+        console.print(f"[yellow]The inputs use {', '.join(sorted(set(zones.values())))}, the merged "
+                      f"archive takes {zone_name} from the newest.[/yellow]")
+
     write_manifest(
         output, file_index,
         own_username=own_username,
         sources=[str(p) for p in inputs],
+        timezone_name=zone_name,
         dry_run=dry_run,
     )
 
@@ -504,7 +512,7 @@ def merge_outputs(
 
     console.rule("[bold yellow]Regenerate[/bold yellow]")
     generate_site(
-        output, json_data, file_index,
+        output, localize(json_data, load_zone(zone_name)), file_index,
         overlay_count=overlay_count,
         dry_run=dry_run,
     )

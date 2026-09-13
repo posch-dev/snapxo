@@ -129,7 +129,7 @@ def test_info_only_asks_where_the_export_is(answering):
 
 
 def test_html_offers_the_filters(answering, archive: Path):
-    answering([str(archive), "y", "someone,another", "5", ""])
+    answering([str(archive), "y", "someone,another", "5"])
 
     args = build_arguments("html")
 
@@ -138,7 +138,7 @@ def test_html_offers_the_filters(answering, archive: Path):
 
 
 def test_html_leaves_the_filters_out_by_default(answering, archive: Path):
-    answering([str(archive), "", "", ""])
+    answering([str(archive), "", ""])
 
     args = build_arguments("html")
 

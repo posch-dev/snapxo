@@ -6,7 +6,9 @@ from pathlib import Path
 
 from rich.console import Console
 
+from ..clock import UTC_NAME, load_zone, localize
 from ..filenames import extract_media_id
+from ..read.inspector import load_json_data
 
 console = Console()
 
@@ -167,3 +169,19 @@ def attach_media_ids(file_index: list[dict], media_map: dict[str, dict]) -> None
         ids = by_dest.get(entry.get("dest", ""))
         if ids:
             entry["media_ids"] = sorted(ids)
+
+
+def archive_zone(manifest: dict) -> str:
+    # Manifests from 1.x carry no zone, their data stayed UTC.
+    return str(manifest.get("timezone") or UTC_NAME)
+
+
+def load_archive(folder: Path, timezone: str = "") -> tuple[dict, list[dict], dict] | None:
+    manifest = load_manifest(folder)
+    if not manifest:
+        console.print(f"[red]{folder} has no _meta/manifest.json, so it is not a "
+                      f"folder SnapXO produced.[/red]")
+        return None
+    # _meta/json stays UTC on disk, every reader shifts it here.
+    json_data = localize(load_json_data(folder / "_meta"), load_zone(timezone or archive_zone(manifest)))
+    return manifest, manifest_to_file_index(manifest, folder), json_data

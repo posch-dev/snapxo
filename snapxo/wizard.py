@@ -165,7 +165,6 @@ def ask_html() -> list[str]:
     least = IntPrompt.ask("Leave out conversations shorter than how many messages", default=1)
     if least > 1:
         args += ["--min-messages", str(least)]
-    _maybe_timezone(args, "Show the timestamps in a different timezone")
     return args
 
 
