@@ -131,3 +131,22 @@ def test_the_same_message_in_both_exports_is_kept_once():
                               {"chat_history": {"friend_one": [dict(message)]}}])
 
     assert len(merged["chat_history"]["friend_one"]) == 1
+
+
+def test_a_chat_missing_from_the_newer_export_survives_the_merge(tmp_path):
+    # Blocking someone drops the chat from every later export.
+    message = {"From": "blocked_friend", "Media Type": "TEXT",
+               "Created": "2025-03-01 10:00:00 UTC", "Content": "still here"}
+    older = _output_folder(tmp_path, "older", {"2025-03-01_0001.jpg": ("red", "idone")})
+    newer = _output_folder(tmp_path, "newer", {"2026-05-02_0001.jpg": ("blue", "idtwo")})
+    (older / "_meta" / "json" / "chat_history.json").write_text(
+        json.dumps({"blocked_friend": [message]}), encoding="utf-8")
+    (newer / "_meta" / "json" / "chat_history.json").write_text(
+        json.dumps({"other_friend": []}), encoding="utf-8")
+    out = tmp_path / "merged"
+
+    merge_outputs([older, newer], out)
+
+    merged = json.loads((out / "_meta" / "json" / "chat_history.json").read_text(encoding="utf-8"))
+    assert merged["blocked_friend"] == [message]
+    assert "other_friend" in merged
