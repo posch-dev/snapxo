@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 from rich.console import Console
+from rich.progress import Progress
 
 from .. import __version__
 from ..archive.manifest import build_media_id_map, load_manifest, manifest_to_file_index
@@ -18,7 +19,7 @@ from ..snapchat import STATUS_TYPES
 from ..tools.browser import PdfRenderer
 from ..tools.deps import require_playwright
 from ..tools.ffmpeg import FFmpeg
-from .pdfparts import render_group
+from .pdfparts import MB, plan_parts, render_group
 from .plaingallery import build_plain_gallery
 
 console = Console()
@@ -65,6 +66,33 @@ def _note_foreign_folders(kind_dir: Path, expected: set[str]) -> None:
     for child in sorted(kind_dir.iterdir()):
         if child.is_dir() and not child.name.startswith(".") and child.name not in expected:
             console.print(f"  [yellow]{child} is not in this archive, left as it is[/yellow]")
+
+
+class _PartProgress:
+    # Positions are absolute within a group, so a group split again rewinds
+    # instead of counting its parts twice.
+
+    def __init__(self, progress: Progress, label: str, estimates: dict[str, list[int]]):
+        self.progress = progress
+        self.label = label
+        self.estimates = estimates
+        self.planned = {group: len(plan_parts(sizes)) for group, sizes in estimates.items()}
+        self.finished_bytes = 0
+        self.finished_parts = 0
+        self.task = progress.add_task(f"{label:<13}", total=max(1, sum(map(sum, estimates.values()))))
+
+    def part_done(self, group: str, chosen: list[int], number: int, total: int, pdf_path: Path):
+        self.planned[group] = total
+        done = self.finished_bytes + sum(self.estimates[group][:chosen[-1] + 1])
+        size = pdf_path.stat().st_size / MB if pdf_path.is_file() else 0
+        self.progress.update(self.task, completed=done, description=(
+            f"{self.label:<13} {self.finished_parts + number}/{sum(self.planned.values())} · "
+            f"{group} part {number} of {total} · {size:.0f} MB"))
+
+    def group_done(self, group: str):
+        self.finished_bytes += sum(self.estimates[group])
+        self.finished_parts += self.planned[group]
+        self.progress.update(self.task, completed=self.finished_bytes)
 
 
 def _message_range(messages: list[dict]) -> tuple[str, str]:
@@ -116,14 +144,17 @@ def _media_years(file_index: list[dict]) -> dict[str, list[int]]:
 
 def _render_media(kind: str, title: str, subtitle: str, folder: Path, out_dir: Path,
                   file_index: list[dict], pictures: dict[int, str], tile_bytes: int,
-                  build_page, facts: dict, renderer) -> bool:
+                  build_page, facts: dict, renderer, progress: Progress) -> bool:
     kind_dir = out_dir / kind
     years = _media_years(file_index)
     _note_foreign_folders(kind_dir, set(years))
+    estimates_by_year = {year: [_file_size(folder, pictures.get(p)) + tile_bytes for p in positions]
+                         for year, positions in years.items()}
+    tracker = _PartProgress(progress, title, estimates_by_year)
     all_rendered = True
 
     for year, positions in years.items():
-        estimates = [_file_size(folder, pictures.get(p)) + tile_bytes for p in positions]
+        estimates = estimates_by_year[year]
 
         def render_part(chosen: list[int], number: int, total: int, pdf_path: Path,
                         year=year, positions=positions) -> bool:
@@ -137,12 +168,15 @@ def _render_media(kind: str, title: str, subtitle: str, folder: Path, out_dir: P
             heading = f"{subtitle} · Part {number} of {total}" + (f" · {period}" if period else "")
             cover = cover_page(f"{title} {year}", heading, rows, __version__)
             # Must sit in the output root, the media paths are relative to it.
-            return _render_page(renderer, build_page(picked, cover),
-                                folder / f"{kind}-{year}_print.tmp.html", pdf_path,
-                                f"{title} {year} · Part {number}/{total}", period)
+            rendered = _render_page(renderer, build_page(picked, cover),
+                                    folder / f"{kind}-{year}_print.tmp.html", pdf_path,
+                                    f"{title} {year} · Part {number}/{total}", period)
+            tracker.part_done(year, chosen, number, total, pdf_path)
+            return rendered
 
         if not render_group(kind_dir / year, f"{kind}-{year}", estimates, render_part):
             all_rendered = False
+        tracker.group_done(year)
 
     if all_rendered:
         (out_dir / f"{kind}.pdf").unlink(missing_ok=True)
@@ -184,8 +218,8 @@ def _message_bytes(folder: Path, message: dict, media_map: dict[str, dict]) -> i
 
 
 def _render_chats(folder: Path, out_dir: Path, json_data: dict, media_map: dict[str, dict],
-                  facts: dict, renderer, chats_with: list[str] | None = None,
-                  min_messages: int = 1) -> int:
+                  facts: dict, renderer, progress: Progress,
+                  chats_with: list[str] | None = None, min_messages: int = 1) -> int:
     prepared, _ = prepare_conversations(json_data, conversations_for=chats_with or None,
                                         min_messages=min_messages)
     if not prepared:
@@ -199,10 +233,13 @@ def _render_chats(folder: Path, out_dir: Path, json_data: dict, media_map: dict[
     if not chats_with:
         _note_foreign_folders(target_dir, {chat["safe_name"] for chat in prepared})
 
+    estimates_by_chat = {chat["safe_name"]: [_message_bytes(folder, message, media_map)
+                                             for message in chat["messages"]] for chat in prepared}
+    tracker = _PartProgress(progress, "Chats", estimates_by_chat)
     rendered = 0
     for chat in prepared:
         messages = chat["messages"]
-        estimates = [_message_bytes(folder, message, media_map) for message in messages]
+        estimates = estimates_by_chat[chat["safe_name"]]
 
         def render_part(chosen: list[int], number: int, total: int, pdf_path: Path,
                         chat=chat, messages=messages) -> bool:
@@ -212,12 +249,15 @@ def _render_chats(folder: Path, out_dir: Path, json_data: dict, media_map: dict[
                 chat["contact"], part, own_username, chat["is_group"],
                 chat["conversation_title"], media_map=media_map, pdf_mode=True, cover=cover,
             )
-            return _render_page(renderer, page, build_dir / f"{chat['safe_name']}.html", pdf_path,
+            done = _render_page(renderer, page, build_dir / f"{chat['safe_name']}.html", pdf_path,
                                 f"{chat['title']} · Part {number}/{total}", period)
+            tracker.part_done(chat["safe_name"], chosen, number, total, pdf_path)
+            return done
 
         if render_group(target_dir / chat["safe_name"], chat["safe_name"], estimates, render_part):
             rendered += 1
             (target_dir / f"{chat['safe_name']}.pdf").unlink(missing_ok=True)
+        tracker.group_done(chat["safe_name"])
 
     if rendered == len(prepared):
         shutil.rmtree(build_dir, ignore_errors=True)
@@ -251,14 +291,14 @@ def render_pdfs(folder: Path, gallery: bool = True, stats: bool = True, chats: b
     facts = archive_facts(folder, file_index, build_series(json_data, file_index))
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    with PdfRenderer() as renderer:
+    with PdfRenderer() as renderer, Progress(console=console) as progress:
         if gallery and file_index:
             details = build_file_details(file_index, json_data)
             if _render_media(MEDIA_DETAILS, "Media gallery", "Every file with its details",
                              folder, out_dir, file_index, thumbs, DETAILS_TILE_BYTES,
                              lambda picked, cover: build_print_index(file_index, details, thumbs,
                                                                      cover, picked),
-                             facts, renderer):
+                             facts, renderer, progress):
                 console.print(f"  Generated the media details PDFs in {out_dir / MEDIA_DETAILS}")
         if memories and file_index:
             previews = _print_previews(file_index, thumbs)
@@ -266,14 +306,14 @@ def render_pdfs(folder: Path, gallery: bool = True, stats: bool = True, chats: b
                              folder, out_dir, file_index, previews, PLAIN_TILE_BYTES,
                              lambda picked, cover: build_plain_gallery(file_index, previews,
                                                                        cover, picked),
-                             facts, renderer):
+                             facts, renderer, progress):
                 console.print(f"  Generated the media plain PDFs in {out_dir / MEDIA_PLAIN}")
         if stats and json_data and _render_stats(folder, out_dir, file_index, json_data,
                                                  facts, renderer, stats_only):
             console.print(f"  Generated stats.pdf in {out_dir}")
         if chats and json_data:
             count = _render_chats(folder, out_dir, json_data, build_media_id_map(file_index),
-                                  facts, renderer, chats_with, min_messages)
+                                  facts, renderer, progress, chats_with, min_messages)
             if count:
                 console.print(f"  Generated the PDFs of {count} chats in {out_dir / CHATS}")
 

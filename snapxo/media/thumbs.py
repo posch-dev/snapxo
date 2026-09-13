@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 from rich.console import Console
+from rich.progress import MofNCompleteColumn, Progress
 
 console = Console()
 
@@ -61,41 +62,43 @@ def build_thumbnails(
     failed = 0
     mediums = 0
 
-    for i, entry in enumerate(file_index):
-        ftype = entry.get("type")
-        if ftype not in ("image", "video"):
-            continue
+    with Progress(*Progress.get_default_columns(), MofNCompleteColumn(), console=console) as progress:
+        for i, entry in progress.track(enumerate(file_index), total=len(file_index),
+                                       description="Thumbnails"):
+            ftype = entry.get("type")
+            if ftype not in ("image", "video"):
+                continue
 
-        target = target_dir / _thumb_name(entry)
-        rel = f"{THUMB_DIR}/{target.name}"
-        source = _source_path(entry, output_dir)
+            target = target_dir / _thumb_name(entry)
+            rel = f"{THUMB_DIR}/{target.name}"
+            source = _source_path(entry, output_dir)
 
-        if target.is_file() and target.stat().st_size > 0:
-            thumbs[i] = rel
-            entry["thumb"] = rel
-            reused += 1
-        elif not source.is_file():
-            continue
-        else:
-            ok = False
-            if ftype == "image":
-                ok = _image_thumb(source, target)
-            elif ff is not None:
-                ok = ff.grab_frame(source, target, height=THUMB_HEIGHT)
-
-            if ok:
+            if target.is_file() and target.stat().st_size > 0:
                 thumbs[i] = rel
-                # The conversations reach their media through the media map and
-                # never see this index.
                 entry["thumb"] = rel
-                built += 1
-                if verbose:
-                    console.print(f"  [cyan][{built}][/cyan] {target.name}")
+                reused += 1
+            elif not source.is_file():
+                continue
             else:
-                failed += 1
+                ok = False
+                if ftype == "image":
+                    ok = _image_thumb(source, target)
+                elif ff is not None:
+                    ok = ff.grab_frame(source, target, height=THUMB_HEIGHT)
 
-        if with_medium and ftype == "image" and _attach_medium(entry, source, mid_dir):
-            mediums += 1
+                if ok:
+                    thumbs[i] = rel
+                    # The conversations reach their media through the media map and
+                    # never see this index.
+                    entry["thumb"] = rel
+                    built += 1
+                    if verbose:
+                        console.print(f"  [cyan][{built}][/cyan] {target.name}")
+                else:
+                    failed += 1
+
+            if with_medium and ftype == "image" and _attach_medium(entry, source, mid_dir):
+                mediums += 1
 
     if built or reused:
         note = f"  Thumbnails: {built} new, {reused} reused"

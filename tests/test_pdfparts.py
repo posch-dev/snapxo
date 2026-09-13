@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from rich.progress import Progress
+
 from snapxo.formats.pdfgen import MEDIA_PLAIN, _render_media
 from snapxo.formats.pdfparts import part_name, plan_parts, render_group
 
@@ -94,7 +96,8 @@ def _media(tmp_path: Path, works: bool) -> bool:
     facts = {"account": "", "covered_from": "", "covered_to": "", "built": "", "rendered": "now",
              "timezone": "UTC", "sources": ["mydata~1.zip"]}
     return _render_media(MEDIA_PLAIN, "Memories", "sub", tmp_path, tmp_path / "pdf", file_index, {},
-                         2048, lambda picked, cover: cover, facts, _FakeRenderer(works))
+                         2048, lambda picked, cover: cover, facts, _FakeRenderer(works),
+                         Progress(disable=True))
 
 
 def test_the_single_pdf_of_the_old_layout_goes_only_after_a_full_success(tmp_path):
