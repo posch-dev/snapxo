@@ -616,4 +616,4 @@ cannot reach the network even if a page asked it to.
 ## Credits and licence
 
 SnapXO stands on other people's work, all of it listed with its licence in
-[THIRD-PARTY-NOTICES.md](https://github.com/posch-dev/snapxo/blob/main/THIRD-PARTY-NOTICES.md). SnapXO itself is GPL-3.0.
+the [README](https://github.com/posch-dev/snapxo/blob/main/README.md#license). SnapXO itself is GPL-3.0.

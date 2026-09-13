@@ -245,23 +245,61 @@ The browser Chromium that `snapxo pdf` uses is put into offline mode, so it
 cannot reach the network even if a page asked it to. This only applies to the
 CLI's `pdf` command, nothing else in SnapXO touches a browser.
 
-## Disclaimer
+## License
+
+SnapXO is [GPL-3.0](https://github.com/posch-dev/snapxo/blob/main/LICENSE).
+
+It is built on these tools:
+
+| Tool | License |
+|---|---|
+| [click](https://github.com/pallets/click) | BSD-3-Clause |
+| [rich](https://github.com/Textualize/rich) | MIT |
+| [Pillow](https://github.com/python-pillow/Pillow) | MIT-CMU |
+| [piexif](https://github.com/hMatoba/Piexif) | MIT |
+| [playwright](https://github.com/microsoft/playwright-python) | Apache-2.0 |
+| [tzdata](https://github.com/python/tzdata) | Apache-2.0 |
+| [openpyxl](https://foss.heptapod.net/openpyxl/openpyxl), optional | MIT |
+| [bcrypt](https://github.com/pyca/bcrypt), optional | Apache-2.0 |
+| [PyYAML](https://github.com/yaml/pyyaml), optional | MIT |
+| [static-ffmpeg](https://github.com/zackees/static_ffmpeg), optional | MIT |
+| [FFmpeg](https://ffmpeg.org/), not bundled | LGPL-2.1-or-later, GPL-2.0-or-later for some builds |
+| [Chromium](https://www.chromium.org/), not bundled | BSD-3-Clause and others |
+| [nginx](https://nginx.org/), Docker image | BSD-2-Clause |
+| [Apache httpd](https://httpd.apache.org/), Docker image | Apache-2.0 |
+| [Leaflet](https://leafletjs.com/), loaded by `map.html` | BSD-2-Clause |
+| [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster), loaded by `map.html` | MIT |
+| [noUiSlider](https://refreshless.com/nouislider/), loaded by `map.html` | MIT |
+| [OpenStreetMap](https://www.openstreetmap.org/copyright) tiles | ODbL data, OSMF tile usage policy |
+| [Lucide](https://lucide.dev/) icons | ISC, notice below |
+
+<details>
+<summary>Lucide license notice</summary>
+
+```
+ISC License
+
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part
+of Feather (MIT). All other copyright (c) for Lucide are held by Lucide
+Contributors 2022.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+```
+
+</details>
 
 > **Not affiliated with Snap Inc.**<br>
 > This is an independent, unofficial open-source tool. It is not created,
 > endorsed, sponsored or supported by Snap Inc., and has no connection to
 > Snapchat, Snap Inc. or any of its products. "Snapchat" and "Snap" are
 > trademarks of Snap Inc., used here only to describe what this tool reads.
-> SnapXO works purely offline on a data export you requested and downloaded
-> yourself. This tool never logs into an account and never contacts Snapchat.
-
-## Credits
-
-SnapXO couldn't have been built without these tools: click, rich,
-Pillow, Leaflet, Lucide and more. Every one of them, what it is used for and
-the licence it comes under, is listed in
-[THIRD-PARTY-NOTICES.md](https://github.com/posch-dev/snapxo/blob/main/THIRD-PARTY-NOTICES.md).
-
-## License
-
-[GPL-3.0](https://github.com/posch-dev/snapxo/blob/main/LICENSE) 

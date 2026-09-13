@@ -106,16 +106,11 @@ path = "snapxo/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["snapxo"]
 
-# Lucide is ISC, which wants its notice in every copy, so the credits go into
-# the wheel and not only into the repository.
-[tool.hatch.build.targets.wheel.force-include]
-"THIRD-PARTY-NOTICES.md" = "snapxo/THIRD-PARTY-NOTICES.md"
-
 [tool.hatch.build.targets.sdist]
 # tests ship too, so the sdist can be verified without cloning the repo.
 # hatchling adds .gitignore on top of this and offers no way to opt out.
 include = ["snapxo", "tests", "README.md", "DOCUMENTATION.md", "PREVIEW.md", "LICENSE",
-           "CHANGELOG.md", "THIRD-PARTY-NOTICES.md"]
+           "CHANGELOG.md"]
 
 [tool.ruff]
 line-length = 120
