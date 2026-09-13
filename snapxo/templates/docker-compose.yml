@@ -7,5 +7,4 @@ services:
     ports:
       - "__PORT__:80"
     volumes:
-      - __ARCHIVE__:/usr/share/nginx/html:ro
-__AUTH_VOLUMES__
+__VOLUMES__

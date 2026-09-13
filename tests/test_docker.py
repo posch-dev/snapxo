@@ -8,9 +8,8 @@ from click.testing import CliRunner
 from snapxo.cli import main
 from snapxo.formats.dockergen import (
     DEFAULT_PORT,
-    NGINX_CONF_FILE,
-    _template,
     build_compose,
+    build_nginx_conf,
     compose_command,
     compose_target,
     docker_htpasswd_command,
@@ -27,18 +26,32 @@ def archive(tmp_path: Path) -> Path:
     return folder
 
 
-def test_the_archive_is_mounted_read_only(archive: Path):
+def test_the_parent_of_the_archive_is_mounted_read_only(archive: Path):
     compose = build_compose(archive, 8080, with_auth=False)
 
-    assert "/usr/share/nginx/html:ro" in compose
+    assert f'"{archive.parent.as_posix()}:/srv/snapxo:ro"' in compose
     assert '"8080:80"' in compose
 
 
-def test_without_a_password_no_auth_files_are_mounted(archive: Path):
+def test_nginx_serves_the_archive_by_name_inside_the_parent(archive: Path):
+    # A folder swapped in under the same name is picked up without a restart.
+    conf = build_nginx_conf(archive, with_auth=False)
+
+    assert 'root "/srv/snapxo/archive";' in conf
+    assert "auth_basic" not in conf
+
+
+def test_without_a_password_no_password_file_is_mounted(archive: Path):
     compose = build_compose(archive, 8080, with_auth=False)
 
     assert ".htpasswd" not in compose
-    assert "snapxo.conf" not in compose
+    assert "snapxo.conf" in compose
+
+
+def test_no_auth_writes_the_nginx_conf_too(archive: Path):
+    assert write_compose(archive) is True
+
+    assert 'root "/srv/snapxo/archive";' in (archive / "snapxo.conf").read_text(encoding="utf-8")
 
 
 def test_with_a_password_the_auth_files_are_mounted(archive: Path):
@@ -49,7 +62,9 @@ def test_with_a_password_the_auth_files_are_mounted(archive: Path):
 
 
 def test_the_password_file_is_never_served():
-    conf = _template(NGINX_CONF_FILE)
+    conf = build_nginx_conf(Path("/data/archive"), with_auth=True)
+
+    assert "auth_basic_user_file /etc/nginx/.htpasswd;" in conf
 
     assert "location ~ /\\. {\n        deny all;" in conf
 
@@ -59,7 +74,7 @@ def test_the_service_block_matches_the_template(archive: Path):
 
     assert block["image"] == "nginx:alpine"
     assert block["ports"] == ["9000:80"]
-    assert block["volumes"][0].endswith(":/usr/share/nginx/html:ro")
+    assert block["volumes"][0] == f"{archive.parent.as_posix()}:/srv/snapxo:ro"
 
 
 def test_a_folder_snapxo_did_not_produce_is_refused(tmp_path: Path):
@@ -87,7 +102,7 @@ def test_the_output_option_puts_it_somewhere_else(archive: Path, tmp_path: Path)
 
     written = elsewhere / "docker-compose.yml"
     assert written.is_file()
-    assert archive.resolve().as_posix() in written.read_text(encoding="utf-8")
+    assert archive.resolve().parent.as_posix() in written.read_text(encoding="utf-8")
 
 
 def test_the_password_is_never_an_argument_value():
@@ -170,7 +185,7 @@ def test_appending_again_replaces_only_the_snapxo_service(archive: Path, tmp_pat
     write_compose(archive, append_to=existing, port=9001)
 
     text = existing.read_text(encoding="utf-8")
-    assert text.count("snapxo:") == 1
+    assert text.count("    snapxo:\n") == 1
     assert yaml.safe_load(text)["services"]["snapxo"]["ports"] == ["9001:80"]
     assert "#    wstunnel:" in text
     # the first backup is the untouched original

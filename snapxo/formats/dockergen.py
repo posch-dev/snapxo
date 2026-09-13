@@ -22,8 +22,9 @@ NGINX_CONF_FILE = "snapxo.conf"
 DEFAULT_PORT = 7627  # SNAP on a phone keypad, and free on any normal machine
 SERVICE_NAME = "snapxo"
 
-AUTH_VOLUMES = ("      - ./snapxo.conf:/etc/nginx/conf.d/default.conf:ro\n"
-                "      - ./.htpasswd:/etc/nginx/.htpasswd:ro")
+PARENT_MOUNT = "/srv/snapxo"
+AUTH_LINES = ('\n    auth_basic "SnapXO archive";\n'
+              "    auth_basic_user_file /etc/nginx/.htpasswd;\n")
 
 
 def is_snapxo_folder(folder: Path) -> bool:
@@ -82,19 +83,35 @@ def _hash_password_with_docker(password: str) -> str | None:
     return line if result.returncode == 0 and line.startswith(f"{SERVICE_NAME}:") else None
 
 
+def served_root(archive: Path) -> str:
+    return f"{PARENT_MOUNT}/{archive.name}"
+
+
+def build_nginx_conf(archive: Path, with_auth: bool) -> str:
+    return (_template(NGINX_CONF_FILE)
+            .replace("__ROOT__", served_root(archive))
+            .replace("__AUTH__", AUTH_LINES if with_auth else ""))
+
+
+def _volumes(archive: Path, with_auth: bool) -> list[str]:
+    # The parent, not the archive: a bind mount pins the folder, a rename would go unseen.
+    volumes = [f"{archive.parent.as_posix()}:{PARENT_MOUNT}:ro",
+               "./snapxo.conf:/etc/nginx/conf.d/default.conf:ro"]
+    if with_auth:
+        volumes.append("./.htpasswd:/etc/nginx/.htpasswd:ro")
+    return volumes
+
+
 def build_compose(archive: Path, port: int, with_auth: bool) -> str:
+    volumes = "\n".join(f"      - {json.dumps(volume)}" for volume in _volumes(archive, with_auth))
     return (_template(COMPOSE_FILE)
             .replace("__PORT__", str(port))
-            .replace("__ARCHIVE__", archive.as_posix())
-            .replace("__AUTH_VOLUMES__", AUTH_VOLUMES if with_auth else "")
+            .replace("__VOLUMES__", volumes)
             .rstrip("\n") + "\n")
 
 
 def service_block(archive: Path, port: int, with_auth: bool) -> dict:
-    volumes = [f"{archive.as_posix()}:/usr/share/nginx/html:ro"]
-    if with_auth:
-        volumes.append("./snapxo.conf:/etc/nginx/conf.d/default.conf:ro")
-        volumes.append("./.htpasswd:/etc/nginx/.htpasswd:ro")
+    volumes = _volumes(archive, with_auth)
     return {
         "image": "nginx:alpine",
         "container_name": SERVICE_NAME,
@@ -228,11 +245,16 @@ def write_compose(
         return False
 
     archive = folder.resolve()
+    if archive.parent == archive or re.search(r'["$\\\n]', archive.name):
+        console.print(f"[red]{archive} cannot be served: nginx needs a folder with a parent "
+                      f"and a name without quotes, $ or backslashes.[/red]")
+        return False
     with_auth = password is not None
     destination = compose_target(folder, target, append_to)
 
     if dry_run:
         console.print(f"Would write {destination} serving {archive} on port {port}")
+        console.print(f"[yellow]The container would see everything in {archive.parent}.[/yellow]")
         return True
 
     credentials = None
@@ -251,10 +273,13 @@ def write_compose(
         destination.write_text(build_compose(archive, port, with_auth), encoding="utf-8")
         console.print(f"Wrote {destination}")
 
+    (destination.parent / NGINX_CONF_FILE).write_text(build_nginx_conf(archive, with_auth), encoding="utf-8")
+    console.print(f"Wrote {NGINX_CONF_FILE} next to it")
+    console.print(f"[yellow]The container sees everything in {archive.parent}, read-only, so keep "
+                  f"the archive in a folder of its own.[/yellow]")
     if with_auth:
-        (destination.parent / NGINX_CONF_FILE).write_text(_template(NGINX_CONF_FILE), encoding="utf-8")
         (destination.parent / HTPASSWD_FILE).write_text(credentials + "\n", encoding="utf-8")
-        console.print(f"Wrote {NGINX_CONF_FILE} and {HTPASSWD_FILE} next to it")
+        console.print(f"Wrote {HTPASSWD_FILE} next to it")
         console.print("[yellow]Basic auth over plain HTTP sends the password on every "
                       "request, only base64 encoded. Fine on your own network, not on "
                       "the open internet.[/yellow]")
