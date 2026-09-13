@@ -15,6 +15,7 @@ from rich.progress import Progress
 from ..filenames import extract_date_from_filename
 from ..files import file_hash
 from ..filetypes import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
+from ..formats.pdfgen import pdf_dir
 from ..media.metadata import apply_file_times
 from ..pages.site import generate_site
 from ..read.inspector import load_json_data
@@ -499,6 +500,8 @@ def merge_outputs(
         dry_run=dry_run,
     )
 
+    had_pdfs = any(pdf_dir(folder).is_dir() for folder in [*inputs, output])
+
     console.rule("[bold yellow]Regenerate[/bold yellow]")
     generate_site(
         output, json_data, file_index,
@@ -531,4 +534,7 @@ def merge_outputs(
 
     console.rule("[bold green]Merge done[/bold green]")
     console.print(f"Output: {output}  ({len(file_index)} files)")
+    if had_pdfs and not dry_run:
+        console.print(f"[yellow]PDFs from before this merge are not updated. Run "
+                      f"`snapxo pdf {output}` for PDFs of the merged archive.[/yellow]")
     return len(file_index)

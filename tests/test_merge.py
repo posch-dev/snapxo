@@ -150,3 +150,13 @@ def test_a_chat_missing_from_the_newer_export_survives_the_merge(tmp_path):
     merged = json.loads((out / "_meta" / "json" / "chat_history.json").read_text(encoding="utf-8"))
     assert merged["blocked_friend"] == [message]
     assert "other_friend" in merged
+
+
+def test_pdfs_from_before_the_merge_are_pointed_out(tmp_path, capsys):
+    a = _output_folder(tmp_path, "a", {"2026-05-01_0001.jpg": ("red", "idone")})
+    b = _output_folder(tmp_path, "b", {"2026-05-02_0001.jpg": ("blue", "idtwo")})
+    (a / "pdf").mkdir()
+
+    merge_outputs([a, b], tmp_path / "merged")
+
+    assert "snapxo pdf" in capsys.readouterr().out
