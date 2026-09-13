@@ -375,6 +375,8 @@ def merge_outputs(
     skip_damaged: bool = False,
     dry_run: bool = False,
     timezone_name: str = "",
+    seen_hashes: dict[Path, str] | None = None,
+    pdf_hint: bool = True,
 ) -> int:
     console.rule("[bold yellow]Collect[/bold yellow]")
     if output is None:
@@ -405,10 +407,16 @@ def merge_outputs(
     _mark_damaged(records, damaged_by_folder)
 
     console.rule("[bold yellow]Deduplicate[/bold yellow]")
+    collected = records
     records, dropped, freed = _deduplicate(records, baselines)
     console.print(f"Kept {len(records)} files, dropped {dropped} duplicates ({freed / (1024*1024):.1f} MB)")
 
+    kept_before_recovery = records
     records, recovered = _recover_damaged(records)
+    if seen_hashes is not None:
+        # A damaged file replaced by an intact copy is not expected in the result.
+        replaced = {id(rec) for rec in kept_before_recovery} - {id(rec) for rec in records}
+        seen_hashes.update({rec["src"]: rec["hash"] for rec in collected if id(rec) not in replaced})
     if recovered:
         console.print(f"[green]Recovered {recovered} damaged files from another export[/green]")
 
@@ -556,7 +564,7 @@ def merge_outputs(
 
     console.rule("[bold green]Merge done[/bold green]")
     console.print(f"Output: {output}  ({len(file_index)} files)")
-    if had_pdfs and not dry_run:
+    if had_pdfs and pdf_hint and not dry_run:
         console.print(f"[yellow]PDFs from before this merge are not updated. Run "
                       f"`snapxo pdf {output}` for PDFs of the merged archive.[/yellow]")
     return len(file_index)

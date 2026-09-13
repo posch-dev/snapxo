@@ -6,6 +6,7 @@ from rich.console import Console
 
 from . import __version__
 from .archive.folder import resolve_many, resolve_one
+from .archive.into import organize_into
 from .archive.merge import merge_outputs
 from .archive.rebuild import rebuild_folder
 from .archive.verify import print_report, verify_folder, write_checksums
@@ -419,6 +420,12 @@ def info_command(input, verbose):
 @click.argument("input", nargs=-1, required=True, type=click.Path(exists=True))
 @click.option("-o", "--output", type=click.Path(),
               help="Directory the archive is written to (not needed for --info and --dry-run)")
+@click.option("--into", "into", type=click.Path(file_okay=False), metavar="ARCHIVE",
+              help="Add the export to an archive you already have, swapped in only after verifying")
+@click.option("--delete-old", is_flag=True,
+              help="With --into: delete ARCHIVE.before-DATE after a successful swap")
+@click.option("--verify/--no-verify", default=True, show_default=True,
+              help="With --into: check ARCHIVE against its manifest before merging")
 # Mode
 @click.option("-y", "--yes", is_flag=True, help="Organize everything without asking")
 @click.option("--dry-run", is_flag=True, help="Show what would happen, without it happening")
@@ -455,7 +462,7 @@ def info_command(input, verbose):
               help="Keep Snapchat's own HTML pages in _meta/html/, which are dropped by default")
 @click.option("--no-checksums", is_flag=True,
               help="Skip fingerprinting the archive, which is what `snapxo verify` compares against")
-def organize(input, output, yes, dry_run,
+def organize(input, output, into, delete_old, verify, yes, dry_run,
          media, types, since, until,
          no_encode, no_overlay, no_exif, no_dedup, no_meta, timezone,
          software_encoding, crf, ffmpeg_path, ffprobe_path,
@@ -473,8 +480,25 @@ def organize(input, output, yes, dry_run,
     What can be picked is which media are copied, along two axes: --media says
     where they came from, --types says what they are. Both default to everything,
     and both only ever apply to files, never to the chats or the statistics.
+
+    --into ARCHIVE adds a new export to an archive you already have. The export
+    is organized in the archive's timezone and folder structure, merged with it
+    beside it, verified, and swapped in. The previous archive stays as
+    ARCHIVE.before-DATE, unless --delete-old removes it.
     """
-    _require_output(output, dry_run)
+    if into and output:
+        raise click.UsageError("--into and -o/--output exclude each other, --into names the archive")
+    if (delete_old or not verify) and not into:
+        raise click.UsageError("--delete-old and --no-verify only apply together with --into")
+    if delete_old and not verify:
+        # Unchecked inputs plus a deleted original loses data for good.
+        raise click.UsageError("--delete-old cannot be combined with --no-verify")
+    _check_timezone(timezone)
+    if not into:
+        _require_output(output, dry_run)
+    elif click.get_current_context().get_parameter_source("folder_structure") is click.core.ParameterSource.DEFAULT:
+        # Only a structure asked for can conflict with the archive's own.
+        folder_structure = ""
     for name, value in (("--since", since), ("--until", until)):
         if value and not _is_iso_date(value):
             raise click.UsageError(f"{name} must be a date like 2026-07-20")
@@ -514,4 +538,7 @@ def organize(input, output, yes, dry_run,
         no_checksums=no_checksums,
     )
 
-    run_pipeline(config)
+    if into:
+        organize_into(config, Path(into), delete_old=delete_old, verify=verify)
+    else:
+        run_pipeline(config)

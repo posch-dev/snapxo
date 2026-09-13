@@ -125,8 +125,11 @@ def ask_info() -> list[str]:
 
 def ask_organize() -> list[str]:
     source = Prompt.ask("Export ZIP or folder").strip().strip('"')
-    output = Prompt.ask("Where should the archive go").strip().strip('"')
-    args = ["organize", source, "-o", output]
+    into = Confirm.ask("Add it to an archive you already have", default=False)
+    if into:
+        args = ["organize", source, "--into", str(ask_existing_folder("Which archive"))]
+    else:
+        args = ["organize", source, "-o", Prompt.ask("Where should the archive go").strip().strip('"')]
 
     # Media first: answering "photos only" makes the encoding question pointless.
     sources = ask_names("Which media should be copied?", SOURCES, SOURCE_LABELS)
@@ -146,7 +149,12 @@ def ask_organize() -> list[str]:
         args.append("--no-dedup")
     if Confirm.ask("Keep Snapchat's own HTML pages as well", default=False):
         args.append("--keep-raw-html")
-    _maybe_timezone(args, "Convert the timestamps out of UTC into your timezone")
+    if into:
+        # The zone is the archive's, asking would only invite a conflict.
+        if Confirm.ask("[red]Delete the previous archive after a verified swap[/red]", default=False):
+            args.append("--delete-old")
+    else:
+        _maybe_timezone(args, "Convert the timestamps out of UTC into your timezone")
 
     args.append("--yes")
     return args

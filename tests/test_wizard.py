@@ -33,7 +33,7 @@ def archive(tmp_path: Path) -> Path:
 
 
 def organize_answers(tmp_path: Path, **replace) -> list[str]:
-    answers = ["export.zip", str(tmp_path / "out"), *ORGANIZE_DEFAULTS]
+    answers = ["export.zip", "", str(tmp_path / "out"), *ORGANIZE_DEFAULTS]
     for position, value in replace.items():
         answers[int(position.removeprefix("q"))] = value
     return answers
@@ -67,15 +67,15 @@ def test_pressing_enter_through_organize_matches_the_plain_command(answering, tm
 
 
 def test_declining_a_step_adds_its_skip_flag(answering, tmp_path: Path):
-    # q4 is the encoding question, after the two media questions
-    answering(organize_answers(tmp_path, q4="n"))
+    # q5 is the encoding question, after the two media questions
+    answering(organize_answers(tmp_path, q5="n"))
 
     assert "--no-encode" in build_arguments("organize")
 
 
 def test_the_media_questions_come_before_the_encoding_one(answering, tmp_path: Path):
     # photos only, so the encoding question is never asked
-    answering(["export.zip", str(tmp_path / "out"), "", "1", "", "", "", ""])
+    answering(["export.zip", "", str(tmp_path / "out"), "", "1", "", "", "", ""])
 
     args = build_arguments("organize")
 
@@ -84,7 +84,7 @@ def test_the_media_questions_come_before_the_encoding_one(answering, tmp_path: P
 
 
 def test_naming_one_source_passes_it_through(answering, tmp_path: Path):
-    answering(organize_answers(tmp_path, q2="1"))
+    answering(organize_answers(tmp_path, q3="1"))
 
     args = build_arguments("organize")
 
@@ -92,9 +92,21 @@ def test_naming_one_source_passes_it_through(answering, tmp_path: Path):
 
 
 def test_picking_everything_is_the_same_as_pressing_enter(answering, tmp_path: Path):
-    answering(organize_answers(tmp_path, q2="1,2"))
+    answering(organize_answers(tmp_path, q3="1,2"))
 
     assert "--media" not in build_arguments("organize")
+
+
+def test_adding_to_an_archive_uses_into_and_asks_no_timezone(answering, archive: Path):
+    # source, into, archive, media, kinds, encode, overlay, dedup, raw html, delete old
+    answering(["export.zip", "y", str(archive), "", "", "", "", "", "", "y"])
+
+    args = build_arguments("organize")
+
+    assert args[:4] == ["organize", "export.zip", "--into", str(archive)]
+    assert "-o" not in args
+    assert "--timezone" not in args
+    assert "--delete-old" in args
 
 
 def test_the_checksum_question_is_gone(answering, tmp_path: Path):
@@ -194,7 +206,7 @@ def test_the_equivalent_command_line_is_shown(answering, capsys, archive: Path):
 
 def test_saying_yes_to_a_timezone_adds_the_flag(answering, tmp_path: Path):
     # last two: yes to converting, then the default zone
-    answering([*organize_answers(tmp_path, q8="y"), ""])
+    answering([*organize_answers(tmp_path, q9="y"), ""])
 
     args = build_arguments("organize")
 
