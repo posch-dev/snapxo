@@ -426,6 +426,8 @@ def info_command(input, verbose):
               help="With --into: delete ARCHIVE.before-DATE after a successful swap")
 @click.option("--verify/--no-verify", default=True, show_default=True,
               help="With --into: check ARCHIVE against its manifest before merging")
+@click.option("--refresh", is_flag=True,
+              help="With --into: render the PDFs, spreadsheets and pages ARCHIVE already has again")
 # Mode
 @click.option("-y", "--yes", is_flag=True, help="Organize everything without asking")
 @click.option("--dry-run", is_flag=True, help="Show what would happen, without it happening")
@@ -462,7 +464,7 @@ def info_command(input, verbose):
               help="Keep Snapchat's own HTML pages in _meta/html/, which are dropped by default")
 @click.option("--no-checksums", is_flag=True,
               help="Skip fingerprinting the archive, which is what `snapxo verify` compares against")
-def organize(input, output, into, delete_old, verify, yes, dry_run,
+def organize(input, output, into, delete_old, verify, refresh, yes, dry_run,
          media, types, since, until,
          no_encode, no_overlay, no_exif, no_dedup, no_meta, timezone,
          software_encoding, crf, ffmpeg_path, ffprobe_path,
@@ -484,12 +486,13 @@ def organize(input, output, into, delete_old, verify, yes, dry_run,
     --into ARCHIVE adds a new export to an archive you already have. The export
     is organized in the archive's timezone and folder structure, merged with it
     beside it, verified, and swapped in. The previous archive stays as
-    ARCHIVE.before-DATE, unless --delete-old removes it.
+    ARCHIVE.before-DATE, unless --delete-old removes it. --refresh renders the
+    PDFs, spreadsheets and single pages the archive already has once more.
     """
     if into and output:
         raise click.UsageError("--into and -o/--output exclude each other, --into names the archive")
-    if (delete_old or not verify) and not into:
-        raise click.UsageError("--delete-old and --no-verify only apply together with --into")
+    if (delete_old or refresh or not verify) and not into:
+        raise click.UsageError("--delete-old, --refresh and --no-verify only apply together with --into")
     if delete_old and not verify:
         # Unchecked inputs plus a deleted original loses data for good.
         raise click.UsageError("--delete-old cannot be combined with --no-verify")
@@ -539,6 +542,6 @@ def organize(input, output, into, delete_old, verify, yes, dry_run,
     )
 
     if into:
-        organize_into(config, Path(into), delete_old=delete_old, verify=verify)
+        organize_into(config, Path(into), delete_old=delete_old, verify=verify, refresh=refresh)
     else:
         run_pipeline(config)

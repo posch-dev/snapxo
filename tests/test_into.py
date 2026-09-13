@@ -8,7 +8,7 @@ from click.testing import CliRunner
 from conftest import write_image
 
 from snapxo import pipeline
-from snapxo.archive import into
+from snapxo.archive import into, refresh
 from snapxo.archive.into import merged_path, organize_into, organized_path
 from snapxo.archive.manifest import load_manifest
 from snapxo.cli import main
@@ -171,3 +171,46 @@ def test_media_is_merged_and_everything_else_carried(archive):
     assert "pdf/stats.pdf" in carried
     assert "docker-compose.yml" in carried
     assert not any(rel.startswith(("2026/", "_meta/")) for rel in carried)
+
+
+def test_only_the_outputs_an_archive_has_are_found(archive):
+    assert refresh.found_outputs(archive).pdfs == ["stats"]
+
+    (archive / "pdf" / "chats").mkdir()
+    (archive / "spreadsheet").mkdir()
+    (archive / "spreadsheet" / "snapxo-stats-2025-01-01.ods").write_bytes(b"old")
+    (archive / "stats.html").write_text("old", encoding="utf-8")
+    found = refresh.found_outputs(archive)
+
+    assert found.pdfs == ["stats", "chats"]
+    assert found.spreadsheets == ["ods"]
+    assert found.pages is True
+
+
+def test_refresh_without_chromium_stops_before_organizing(archive, new_export, monkeypatch, capsys):
+    monkeypatch.setattr(refresh, "playwright_status", lambda: (False, "browser"))
+
+    with pytest.raises(SystemExit):
+        organize_into(_organize([new_export]), archive, refresh=True)
+
+    assert not organized_path(archive).exists()
+    assert "playwright install chromium" in capsys.readouterr().out
+
+
+def test_refresh_renders_only_what_the_archive_had(archive, new_export, monkeypatch):
+    rendered = {}
+    monkeypatch.setattr(refresh, "playwright_status", lambda: (True, ""))
+    monkeypatch.setattr(refresh, "render_pdfs", lambda folder, **kinds: rendered.update(kinds) or True)
+    (archive / "spreadsheet").mkdir()
+    (archive / "spreadsheet" / "snapxo-stats-2025-01-01.ods").write_bytes(b"old")
+    (archive / "stats.html").write_text("old", encoding="utf-8")
+
+    organize_into(_organize([new_export]), archive, refresh=True)
+
+    assert rendered == {"gallery": False, "memories": False, "stats": True, "chats": False}
+    sheets = [p.name for p in (archive / "spreadsheet").iterdir()]
+    assert len(sheets) == 1 and sheets[0] != "snapxo-stats-2025-01-01.ods"
+    assert (archive / "stats.html").read_text(encoding="utf-8") != "old"
+    previous = next(archive.parent.glob("Snapchat.before-*"))
+    assert (previous / "spreadsheet" / "snapxo-stats-2025-01-01.ods").read_bytes() == b"old"
+    assert (previous / "stats.html").read_text(encoding="utf-8") == "old"

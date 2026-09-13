@@ -98,8 +98,8 @@ def test_picking_everything_is_the_same_as_pressing_enter(answering, tmp_path: P
 
 
 def test_adding_to_an_archive_uses_into_and_asks_no_timezone(answering, archive: Path):
-    # source, into, archive, media, kinds, encode, overlay, dedup, raw html, delete old
-    answering(["export.zip", "y", str(archive), "", "", "", "", "", "", "y"])
+    # source, into, archive, media, kinds, encode, overlay, dedup, raw html, refresh, delete old
+    answering(["export.zip", "y", str(archive), "", "", "", "", "", "", "y", "y"])
 
     args = build_arguments("organize")
 
@@ -107,6 +107,7 @@ def test_adding_to_an_archive_uses_into_and_asks_no_timezone(answering, archive:
     assert "-o" not in args
     assert "--timezone" not in args
     assert "--delete-old" in args
+    assert "--refresh" in args
 
 
 def test_the_checksum_question_is_gone(answering, tmp_path: Path):

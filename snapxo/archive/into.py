@@ -17,6 +17,7 @@ from ..pipeline import run_pipeline
 from .checkpoint import CHECKPOINT_FILE
 from .manifest import archive_zone, load_manifest
 from .merge import _file_type, _is_media_dir, _transfer, merge_outputs
+from .refresh import check_tools, found_outputs, refresh_outputs
 from .verify import print_report, verify_folder
 
 console = Console()
@@ -141,7 +142,8 @@ def _swap(archive: Path, merged: Path) -> Path:
     return before
 
 
-def organize_into(config: Config, archive: Path, delete_old: bool = False, verify: bool = True) -> bool:
+def organize_into(config: Config, archive: Path, delete_old: bool = False, verify: bool = True,
+                  refresh: bool = False) -> bool:
     check_leftovers(archive)
     manifest = load_manifest(archive)
     if not manifest:
@@ -158,6 +160,10 @@ def organize_into(config: Config, archive: Path, delete_old: bool = False, verif
         _stop(f"[red]{archive} is sorted by {structure}, not {config.folder_structure}.[/red]",
               "  Leave out --folder-structure, the new export follows the archive.")
 
+    outputs = found_outputs(archive)
+    if refresh and not check_tools(outputs):
+        raise SystemExit(1)
+
     organized, merged = organized_path(archive), merged_path(archive)
     config.timezone, config.folder_structure, config.output = zone, structure, organized
 
@@ -168,6 +174,8 @@ def organize_into(config: Config, archive: Path, delete_old: bool = False, verif
                       f"rename {archive.name} to {before_path(archive).name} and the merge to {archive.name}")
         if delete_old:
             console.print(f"Would delete {before_path(archive).name} afterwards")
+        for command in outputs.commands(archive) if refresh else []:
+            console.print(f"Would refresh with: {command}")
         return True
     if not load_manifest(organized) or (organized / CHECKPOINT_FILE).exists():
         _stop(f"[red]Organizing did not finish, {archive} is untouched. Run the same command again "
@@ -200,10 +208,14 @@ def organize_into(config: Config, archive: Path, delete_old: bool = False, verif
     shutil.rmtree(organized, ignore_errors=True)
     console.print(f"{archive} is the new archive, the previous one is {before}")
 
-    for folder, command in (("pdf/", "pdf"), ("spreadsheet/", "spreadsheet")):
-        if any(rel.startswith(folder) for rel in carried):
-            console.print(f"[yellow]The {command} files from before are not updated. Run "
-                          f"`snapxo {command} {archive}` to refresh them.[/yellow]")
+    if refresh and outputs:
+        console.rule("[bold yellow]Refresh[/bold yellow]")
+        refresh_outputs(archive, outputs)
+    elif outputs:
+        console.print("[yellow]The PDFs, spreadsheets and pages from before do not have the new export "
+                      "yet. --refresh does this next time, or run:[/yellow]")
+        for command in outputs.commands(archive):
+            console.print(f"  [cyan]{command}[/cyan]")
 
     if delete_old:
         _delete_before(before, config.yes)

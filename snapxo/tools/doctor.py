@@ -11,7 +11,7 @@ from .ffmpeg import FFmpeg
 console = Console()
 
 
-def _line(state: str, label: str, detail: str = "") -> None:
+def status_line(state: str, label: str, detail: str = "") -> None:
     # Padded before the markup, rich would otherwise count the tags as width.
     color = {"ok": "green", "missing": "red"}.get(state, "yellow")
     console.print(f"  [{color}]{state:<9}[/{color}] {label:<20}" + (f" [dim]{detail}[/dim]" if detail else ""))
@@ -22,13 +22,13 @@ def run_doctor() -> bool:
 
     ff = FFmpeg()
     has_ffmpeg = ff.check()
-    _line("ok" if has_ffmpeg else "missing", "ffmpeg / ffprobe", ff.ffmpeg if has_ffmpeg else "")
+    status_line("ok" if has_ffmpeg else "missing", "ffmpeg / ffprobe", ff.ffmpeg if has_ffmpeg else "")
     if has_ffmpeg:
-        _line("ok" if ff.qsv_available else "software", "hardware encoding",
+        status_line("ok" if ff.qsv_available else "software", "hardware encoding",
               "Intel QSV" if ff.qsv_available else "falling back to libx265")
 
     browser_ok, reason = playwright_status()
-    _line("ok" if browser_ok else "missing", "PDF browser", "" if browser_ok else f"playwright {reason}")
+    status_line("ok" if browser_ok else "missing", "PDF browser", "" if browser_ok else f"playwright {reason}")
 
     console.rule("[bold yellow]Space[/bold yellow]")
     here = Path.cwd()
@@ -47,9 +47,13 @@ def run_doctor() -> bool:
             console.print(f"    [cyan]{command}[/cyan]")
         console.print("    [dim]or run with --types photos, which needs no ffmpeg[/dim]")
     if not browser_ok:
-        console.print("[bold]`snapxo pdf` needs Chromium:[/bold]")
-        if reason == "package":
-            console.print("    [cyan]pip install playwright[/cyan]")
-        console.print("    [cyan]playwright install chromium[/cyan]")
-        console.print("    [dim]or use `snapxo html`, which needs nothing[/dim]")
+        print_browser_help(reason)
     return False
+
+
+def print_browser_help(reason: str) -> None:
+    console.print("[bold]`snapxo pdf` needs Chromium:[/bold]")
+    if reason == "package":
+        console.print("    [cyan]pip install playwright[/cyan]")
+    console.print("    [cyan]playwright install chromium[/cyan]")
+    console.print("    [dim]or use `snapxo html`, which needs nothing[/dim]")

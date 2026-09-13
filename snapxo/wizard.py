@@ -151,6 +151,8 @@ def ask_organize() -> list[str]:
         args.append("--keep-raw-html")
     if into:
         # The zone is the archive's, asking would only invite a conflict.
+        if Confirm.ask("Render its PDFs, spreadsheets and pages again afterwards", default=False):
+            args.append("--refresh")
         if Confirm.ask("[red]Delete the previous archive after a verified swap[/red]", default=False):
             args.append("--delete-old")
     else:
