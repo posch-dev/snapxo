@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -542,6 +543,6 @@ def organize(input, output, into, delete_old, verify, refresh, yes, dry_run,
     )
 
     if into:
-        organize_into(config, Path(into), delete_old=delete_old, verify=verify, refresh=refresh)
+        organize_into(config, Path(os.path.abspath(into)), delete_old=delete_old, verify=verify, refresh=refresh)
     else:
         run_pipeline(config)
