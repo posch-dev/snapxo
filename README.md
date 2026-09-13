@@ -137,6 +137,7 @@ build on the archive `organize` just made.
 | Command | What it does                                                                   |
 |---|--------------------------------------------------------------------------------|
 | `snapxo organize EXPORT -o ARCHIVE` | turn an export into an archive                                                 |
+| `snapxo organize EXPORT --into ARCHIVE` | add a newer export to the archive you already have                             |
 | `snapxo info EXPORT` | see what a ZIP export from Snapchat contains, writes nothing                   |
 | `snapxo rebuild ARCHIVE` | bring an older archive up to date, without the export ZIP                      |
 | `snapxo pdf ARCHIVE` | render the media, the statistics and every chat for paper                      |
@@ -201,7 +202,7 @@ The other commands add to it:
 |---|--------------------------------------------------------------------------------------------------------------------------------|
 | `snapxo pdf` | creates `pdf/` with `stats.pdf`, and `media-details/`, `media-plain/` per year and `chats/` per chat, split into PDFs of at most 110 MB |
 | `snapxo spreadsheet` | creates `spreadsheet/` with one file per format                                                                                |
-| `snapxo docker` | creates or appends `docker-compose.yml` file                                                                                   |
+| `snapxo docker` | creates or appends `docker-compose.yml`, and writes `snapxo.conf` beside it                                                     |
 | `snapxo html` | creates seperate individual independant html pages <br> <br> (`gallery.html`, `chats.html`, `stats.html` and `conversations/`) |
 
 ## Flags
@@ -212,6 +213,7 @@ The most-used ones. The full list for every command is in
 | Flag | Description                                                                                |
 |------|--------------------------------------------------------------------------------------------|
 | `-o, --output PATH` | Directory the archive is written to, created if it doesn't exist                           |
+| `--into ARCHIVE` | Add the export to an existing archive, swapped in only after every file is verified        |
 | `-y, --yes` | Organize everything without asking                                                         |
 | `--dry-run` | Show what would happen, without it happening                                               |
 | `--media SOURCE,SOURCE` | Which media get pulled from the export: `memories`, `chat` (default: both)                 |

@@ -38,7 +38,7 @@ From a clone, every command runs as `python -m snapxo ...`.
 2. `snapxo info mydata.zip`
 3. `snapxo organize mydata.zip -o ./archive -y`
 4. Open `archive/index.html`
-5. Later exports: organize each one, then `snapxo merge`
+5. Later exports: `snapxo organize newdata.zip --into ./archive -y`, see [Add a new export](#add-a-new-export)
 6. Optional: `pdf`, `spreadsheet`, `docker`, `verify`
 
 What `organize` runs, in order:
@@ -47,12 +47,41 @@ Input → Inspect → Extract → Scan → Fix types → Dedup → Voice check �
 Voice convert → Overlay → Encode H.265 → EXIF/GPS → File dates → Thumbnails →
 Snap Map → Pages → Meta → Checksums → Cleanup
 
+## Add a new export
+
+```bash
+snapxo organize newdata.zip --into ./archive -y
+snapxo organize newdata.zip --into ./archive -y --refresh --delete-old
+```
+
+1. The export is organized into `archive.into-new/`, in the archive's timezone
+   and folder structure. An interrupted run picks up there.
+2. Both are merged into `archive.into-tmp/`, hardlinked where the drive allows.
+   `pdf/`, `spreadsheet/`, the docker files and anything else of yours come along.
+3. Every file of the archive and of the export has to be in the result, by
+   content. If one is not, the run stops and `archive` is untouched.
+4. `archive` becomes `archive.before-YYYY-MM-DD`, the merge becomes `archive`.
+5. `--refresh` renders the PDFs, spreadsheets and single pages the archive had
+   again. Without it SnapXO prints the commands that do.
+
+`archive.before-…` shares its media with the new archive through hardlinks. It
+guards against a bad merge, not against a failing disk: keep a real backup.
+A run that finds `archive.into-tmp/`, or `archive` missing beside an
+`archive.before-…`, explains what happened and what to rename, and changes nothing.
+
+`--timezone` and `--folder-structure` must match the archive or be left out. To
+change the zone first: `snapxo rebuild ./archive --timezone ZONE`.
+
+With `snapxo docker` the container sees the new archive at once, no restart
+needed, see [docker](#docker).
+
 ## Commands
 
 | Command | Does |
 |---|---|
 | `snapxo info EXPORT` | show what an export contains, writes nothing |
 | `snapxo organize EXPORT -o ARCHIVE` | turn an export into an archive |
+| `snapxo organize EXPORT --into ARCHIVE` | add a new export to an archive |
 | `snapxo rebuild ARCHIVE` | rewrite the pages of an archive with the current version |
 | `snapxo html ARCHIVE` | one page per topic, beside `index.html` |
 | `snapxo pdf ARCHIVE` | media, statistics and chats as PDFs |
@@ -73,11 +102,16 @@ snapxo organize export1.zip export2.zip -o ./archive -y
 snapxo organize ~/Downloads -o ./archive -y          # every Snapchat ZIP in it
 snapxo organize ./extracted/ -o ./archive -y
 snapxo organize mydata.zip --media memories --types photos,videos --since 2024-01-01
+snapxo organize newdata.zip --into ./archive -y
 ```
 
 | Flag | Does |
 |---|---|
 | `-o, --output PATH` | archive folder, created if missing |
+| `--into ARCHIVE` | add to this archive instead, see [Add a new export](#add-a-new-export) |
+| `--refresh` | with `--into`: render the PDFs, spreadsheets and pages the archive had again |
+| `--delete-old` | with `--into`: delete `ARCHIVE.before-…` after the swap, asks unless `-y` |
+| `--verify / --no-verify` | with `--into`: check the archive first (default: verify) |
 | `-y, --yes` | no questions |
 | `--dry-run` | show, write nothing |
 | `--media memories,chat` | where media come from (default: both) |
@@ -100,6 +134,8 @@ snapxo organize mydata.zip --media memories --types photos,videos --since 2024-0
 
 `index.html` is always written, even with no media copied.
 `--types voice` needs ffprobe, `--types photos` needs no ffmpeg at all.
+`--delete-old` cannot be combined with `--no-verify`. `--refresh` checks for
+Chromium and openpyxl before it starts, when the archive has PDFs or XLSX files.
 
 > **`--no-meta` cannot be undone.** `rebuild` and `merge` need `_meta/json/`
 > and never work on that folder again.
@@ -209,8 +245,12 @@ snapxo merge ./all-archives -o ./merged --hardlink --delete-sources
 
 Deduplicates by content, renumbers by date, combines the JSON and rebuilds the
 pages. Nothing is re-encoded. Chats and data missing from a newer export, e.g.
-after blocking someone, stay in. The timezone comes from the newest archive.
-PDFs are not carried over: run `snapxo pdf` on the result.
+after blocking someone, stay in. PDFs are not carried over: run `snapxo pdf`
+on the result. To add a new export to your archive, `organize --into` is simpler.
+
+Archives in different timezones stop the merge before anything is written;
+`--timezone ZONE` picks the zone of the result, as on `organize` and `rebuild`.
+Archives in the same zone need no flag.
 
 | Flag | Does |
 |---|---|
@@ -221,6 +261,7 @@ PDFs are not carried over: run `snapxo pdf` on the result.
 | `--folder-structure [year\|year-month]` | folder per year or per month |
 | `--verify / --no-verify` | check inputs first, a damaged file stops the merge (default: verify) |
 | `--skip-damaged` | with `--no-verify`: leave damaged files out instead of marking them |
+| `--timezone ZONE` | zone of the merged archive, required when the inputs differ |
 | `--dry-run` | show, write nothing |
 
 An intact copy in another input beats a damaged one.
@@ -233,8 +274,12 @@ snapxo docker ./archive --password
 snapxo docker ./archive --no-auth --port 9000 --up
 ```
 
-Writes a `docker-compose.yml`: nginx, archive mounted read-only. Images load
-only when a page asks for them.
+Writes a `docker-compose.yml` and `snapxo.conf`: nginx, the archive's **parent
+folder** mounted read-only, the archive served by its name. A folder swapped in
+under that name, as `organize --into` does, is served without restarting the
+container. Everything in the parent is visible to the container, so give the
+archive a folder of its own, e.g. `/srv/snapchat/archive`. Files starting with
+`.` are never served. Images load only when a page asks for them.
 
 | Flag | Does |
 |---|---|
@@ -242,7 +287,7 @@ only when a page asks for them.
 | `--no-auth` | no password |
 | `--port INT` | host port (default: 7627) |
 | `-o, --output PATH` | compose file elsewhere |
-| `--append FILE` | add the service to an existing compose file |
+| `--append FILE` | add the service to an existing compose file, comments kept, `FILE.bak` and a diff |
 | `--up` | `docker compose up -d` afterwards |
 | `--dry-run` | show, write nothing |
 
@@ -261,7 +306,7 @@ snapxo verify ./archive --hash
 | Flag | Does |
 |---|---|
 | `--hash` | read every byte against `_meta/checksums.json` (slow, finds bit rot) |
-| `--update` | accept the current state as the new baseline |
+| `--update` | accept the current state as the new baseline, implies `--hash` |
 
 Without `--hash`: every file present, right size.
 
@@ -302,7 +347,8 @@ archive/
 |---|---|
 | `snapxo pdf` | `pdf/`: `stats.pdf`, `media-details/`, `media-plain/`, `chats/` |
 | `snapxo spreadsheet` | `spreadsheet/` |
-| `snapxo docker` | `docker-compose.yml`, with `--password` also `snapxo.conf` and `.htpasswd` |
+| `snapxo docker` | `docker-compose.yml` and `snapxo.conf`, with `--password` also `.htpasswd` |
+| `organize --into` | `ARCHIVE.before-YYYY-MM-DD/` beside the archive |
 | `snapxo html` | `gallery.html`, `chats.html`, `stats.html`, `conversations/` |
 
 ## Resume and re-runs
@@ -310,6 +356,7 @@ archive/
 - An interrupted `organize` continues where it stopped, via
   `.snaporganizer_checkpoint.json`. Nothing is encoded, overlaid or copied twice.
 - Changed input, output or flags start fresh, as does `--no-resume`.
+- `organize --into` resumes in `ARCHIVE.into-new/` the same way.
 - `rebuild`, `html`, `pdf`, `spreadsheet` and `verify` can run on the same
   archive as often as you like. Older archives are brought up to date, never
   broken.
