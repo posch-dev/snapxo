@@ -6,6 +6,8 @@ import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from ..files import replacing
+
 FORMATS = ("xlsx", "ods", "csv")
 
 
@@ -19,7 +21,7 @@ def file_name(base: str, extension: str, stamp: str) -> str:
 
 
 def write_csv(dataset: dict, target: Path) -> Path:
-    with target.open("w", encoding="utf-8-sig", newline="") as handle:
+    with replacing(target) as pending, pending.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(dataset["columns"])
         writer.writerows(dataset["rows"])
@@ -59,7 +61,8 @@ def write_xlsx(datasets: list[dict], target: Path, with_charts: bool = True) -> 
         chart.height, chart.width = 8, 20
         sheet.add_chart(chart, f"{chr(ord('A') + last_column + 1)}2")
 
-    book.save(target)
+    with replacing(target) as pending:
+        book.save(pending)
     return target
 
 
@@ -90,7 +93,7 @@ def write_ods(datasets: list[dict], target: Path) -> Path:
         "</manifest:manifest>"
     )
 
-    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+    with replacing(target) as pending, zipfile.ZipFile(pending, "w", zipfile.ZIP_DEFLATED) as archive:
         # The mimetype has to be the first entry and stored, not deflated.
         archive.writestr(zipfile.ZipInfo("mimetype"),
                          "application/vnd.oasis.opendocument.spreadsheet",

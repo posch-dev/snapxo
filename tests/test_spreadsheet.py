@@ -121,3 +121,18 @@ def test_a_spreadsheet_cell_carries_both_names():
     rows = {s["key"]: s["rows"] for s in stats_datasets(series)}["who-writes-you-most"]
 
     assert rows == [["Alice (alice_99)", 5], ["bob", 3]]
+
+
+def test_rewriting_a_spreadsheet_never_changes_a_hardlinked_copy(tmp_path: Path):
+    import os
+
+    written = write_ods([_dataset()], tmp_path / "a.ods")
+    kept = tmp_path / "kept.ods"
+    os.link(written, kept)
+    before = kept.read_bytes()
+
+    write_csv(_dataset(), tmp_path / "a.ods")
+
+    assert kept.read_bytes() == before
+    assert (tmp_path / "a.ods").read_bytes() != before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["a.ods", "kept.ods"]

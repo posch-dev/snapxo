@@ -1,5 +1,7 @@
 import hashlib
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -9,6 +11,17 @@ def file_hash(filepath: Path, chunk_size: int = 65536) -> str:
         while chunk := handle.read(chunk_size):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+@contextmanager
+def replacing(target: Path) -> Iterator[Path]:
+    # The new file takes the name only once complete, and never writes through a hardlink.
+    pending = target.with_name(f".{target.name}.tmp")
+    try:
+        yield pending
+        os.replace(pending, target)
+    finally:
+        pending.unlink(missing_ok=True)
 
 
 def copy_timestamps(src: Path, dst: Path):

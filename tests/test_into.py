@@ -65,6 +65,9 @@ def test_into_swaps_in_the_merged_archive_and_keeps_the_previous_one(archive, ne
     assert len(_media(archive)) == len(before_media) + 1
     assert (archive / "pdf" / "stats.pdf").read_bytes() == b"%PDF-1.7 old stats"
     assert (archive / "docker-compose.yml").is_file()
+    assert (archive / "pdf" / "stats.pdf").stat().st_nlink == 2
+    # rewritten in place by `snapxo docker`, so copied rather than shared
+    assert (archive / "docker-compose.yml").stat().st_nlink == 1
 
     previous = [p for p in archive.parent.iterdir() if p.name.startswith("Snapchat.before-")]
     assert len(previous) == 1

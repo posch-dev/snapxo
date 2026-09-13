@@ -7,6 +7,8 @@ from pathlib import Path
 
 from rich.console import Console
 
+from ..files import replacing
+
 console = Console()
 
 LAUNCH_ARGS = [
@@ -118,7 +120,8 @@ class PdfRenderer:
                 left=escape(footer_left),
                 right='Page <span class="pageNumber"></span> of <span class="totalPages"></span>',
             )
-            page.pdf(path=str(pdf_path), **options)
+            with replacing(pdf_path) as pending:
+                page.pdf(path=str(pending), **options)
             return True
         except Exception as e:
             console.print(f"    [red]PDF failed ({html_path.name}): {e}[/red]")

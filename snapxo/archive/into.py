@@ -93,7 +93,8 @@ def carry_over(archive: Path, merged: Path) -> list[str]:
     for rel in files_to_carry(archive):
         if (merged / rel).exists():
             continue
-        _transfer(archive / rel, merged / rel, hardlink=True)
+        # PDFs and spreadsheets are only ever replaced by rename, HTML and docker files are rewritten in place.
+        _transfer(archive / rel, merged / rel, hardlink=rel.startswith(("pdf/", "spreadsheet/")))
         carried.append(rel)
     return carried
 
