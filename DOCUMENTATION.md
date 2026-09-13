@@ -126,7 +126,7 @@ never touched.
 
 | Flag | Does |
 |---|---|
-| `--timezone ZONE` | show times in this zone instead of the stored one |
+| `--timezone ZONE` | switch the archive to this zone, later commands use it too |
 | `--dry-run` | show, write nothing |
 | `-v, --verbose` | every file |
 
@@ -146,7 +146,6 @@ works on its own.
 | `--chats-with NAME,NAME` | only these contacts, by Snapchat username |
 | `--min-messages N` | skip chats with fewer messages (default: 1) |
 | `--stats-only CAT,CAT` | only these categories: `account`, `calls`, `engagement`, `friends`, `locations`, `search`, `stickers` |
-| `--timezone ZONE` | show times in this zone |
 | `--dry-run` | show, write nothing |
 | `-v, --verbose` | every file |
 
@@ -210,8 +209,8 @@ snapxo merge ./all-archives -o ./merged --hardlink --delete-sources
 
 Deduplicates by content, renumbers by date, combines the JSON and rebuilds the
 pages. Nothing is re-encoded. Chats and data missing from a newer export, e.g.
-after blocking someone, stay in. PDFs are not carried over: run `snapxo pdf` on
-the result.
+after blocking someone, stay in. The timezone comes from the newest archive.
+PDFs are not carried over: run `snapxo pdf` on the result.
 
 | Flag | Does |
 |---|---|
