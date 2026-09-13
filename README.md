@@ -199,7 +199,7 @@ The other commands add to it:
 
 | Command | What it adds                                                                                                                   |
 |---|--------------------------------------------------------------------------------------------------------------------------------|
-| `snapxo pdf` | creates `pdf/` with `media-details.pdf`, `media-plain.pdf`, `stats.pdf` and `pdf/chats/`                                       |
+| `snapxo pdf` | creates `pdf/` with `stats.pdf`, and `media-details/`, `media-plain/` per year and `chats/` per chat, split into PDFs of at most 110 MB |
 | `snapxo spreadsheet` | creates `spreadsheet/` with one file per format                                                                                |
 | `snapxo docker` | creates or appends `docker-compose.yml` file                                                                                   |
 | `snapxo html` | creates seperate individual independant html pages <br> <br> (`gallery.html`, `chats.html`, `stats.html` and `conversations/`) |
