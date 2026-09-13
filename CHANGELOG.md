@@ -4,6 +4,51 @@ All notable changes to SnapXO are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the version numbers
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-09-13
+
+### Added
+
+- **`snapxo organize EXPORT --into ARCHIVE`** adds a new export to the archive
+  you already have. It is organized in the archive's timezone and folder
+  structure, merged beside it with hardlinks, and swapped in only after every
+  file of the archive and of the export is found in the result by content.
+  The previous archive stays as `ARCHIVE.before-YYYY-MM-DD`, `pdf/`,
+  `spreadsheet/` and the docker files come along. An interrupted run is
+  explained instead of guessed at. `--delete-old` removes the previous archive
+  after asking. The wizard offers it.
+- **`--refresh`** with `--into` renders the PDFs, spreadsheets and single pages
+  the archive had once more, and checks for Chromium and openpyxl before it
+  starts.
+- **`snapxo merge --timezone ZONE`** sets the zone of the merged archive.
+
+### Changed
+
+- **`snapxo merge` stops when the archives use different timezones** and names
+  each one with its zone, instead of silently taking the newest one's.
+- **`snapxo docker` mounts the archive's parent folder** and serves the archive
+  by name, so a folder swapped in under that name is served without restarting
+  the container. `snapxo.conf` is now written without a password too. Give the
+  archive a folder of its own, everything in the parent is visible to the
+  container. Compose files from earlier versions keep working as they are, run
+  `snapxo docker` again to switch.
+
+### Fixed
+
+- **`snapxo merge` keeps the list of exports** in the manifest. It recorded the
+  input folders instead, so every merge lost where the archive came from.
+- **`snapxo docker --append` keeps comments, commented-out services and
+  formatting** of the compose file. It writes `FILE.bak` first and prints the
+  diff, and refuses a file it cannot change without touching anything else.
+- **nginx never serves files starting with `.`**, such as `.htpasswd` beside a
+  compose file inside the archive.
+- **`snapxo verify --update` writes the baseline** without `--hash` as well. It
+  did nothing on its own.
+- **Dry runs only say what they would write.** `rebuild --dry-run` and
+  `organize --dry-run` claimed to have generated map.html and organized files,
+  and `organize --dry-run` deleted leftover `.tmp` files in an existing archive.
+- **`stats.pdf` and spreadsheets are replaced only once the new file is
+  complete.** A failed render or save left a truncated file behind.
+
 ## [2.0.2] - 2026-09-13
 
 ### Changed
