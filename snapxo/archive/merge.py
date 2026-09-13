@@ -445,7 +445,7 @@ def merge_outputs(
 
     overlay_count = _copy_overlays(inputs, output, hardlink, dry_run)
     if overlay_count:
-        console.print(f"  Copied {overlay_count} overlays")
+        console.print(f"  {'Would copy' if dry_run else 'Copied'} {overlay_count} overlays")
 
     file_index = []
     for rec in records:

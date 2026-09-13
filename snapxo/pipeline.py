@@ -299,7 +299,8 @@ def run_pipeline(config: Config):
             all_paths = [mf.path for mf in scan.all_media]
             removed, freed, dup_alias = remove_duplicates(all_paths, dry_run=config.dry_run, verbose=config.verbose)
             if removed:
-                console.print(f"Removed {removed} duplicates ({freed / (1024*1024):.1f} MB freed)")
+                verb = "Would remove" if config.dry_run else "Removed"
+                console.print(f"{verb} {removed} duplicates ({freed / (1024*1024):.1f} MB freed)")
                 scan = scan_export(export_dir)
             else:
                 console.print("No duplicates found")
@@ -346,7 +347,7 @@ def run_pipeline(config: Config):
         dry_run=config.dry_run,
         checkpoint=checkpoint,
     )
-    console.print(f"Organized {len(file_index)} files")
+    console.print(f"{'Would organize' if config.dry_run else 'Organized'} {len(file_index)} files")
     checkpoint.flush()
 
     if voice_files:
@@ -409,14 +410,16 @@ def run_pipeline(config: Config):
             memories_history = json_data.get("memories_history", {}).get("Saved Media", [])
             if memories_history:
                 written = apply_gps_metadata(file_index, memories_history, dry_run=config.dry_run)
-                console.print(f"Wrote GPS to {written} images")
+                console.print(f"{'Would write' if config.dry_run else 'Wrote'} GPS to {written} images")
             checkpoint.complete_step("exif")
 
     if file_index:
         console.rule("[bold yellow]Step 15: File dates[/bold yellow]")
         if not _done_already(checkpoint, "filetimes"):
-            touched = apply_file_times(file_index, dry_run=config.dry_run)
-            console.print(f"Set the file date on {touched} files")
+            if config.dry_run:
+                console.print(f"Would set the file date on {len(file_index)} files")
+            else:
+                console.print(f"Set the file date on {apply_file_times(file_index)} files")
             checkpoint.complete_step("filetimes")
 
     own_username = _own_username(json_data)
@@ -452,7 +455,7 @@ def run_pipeline(config: Config):
     if not _done_already(checkpoint, "map"):
         if generate_map_html(json_data, output_dir, file_index=file_index or None,
                              dry_run=config.dry_run):
-            console.print("Generated map.html")
+            console.print("Would write map.html" if config.dry_run else "Generated map.html")
         checkpoint.complete_step("map")
 
     console.rule("[bold yellow]Step 18: Pages[/bold yellow]")
@@ -494,8 +497,8 @@ def run_pipeline(config: Config):
             console.print(f"Fingerprinted {len(computed)} files for later `snapxo verify` runs")
 
     console.rule("[bold yellow]Step 23: Cleanup[/bold yellow]")
-    removed = cleanup_tmp_files(output_dir, verbose=config.verbose)
-    console.print(f"Cleaned {removed} tmp files")
+    removed = cleanup_tmp_files(output_dir, verbose=config.verbose, dry_run=config.dry_run)
+    console.print(f"{'Would remove' if config.dry_run else 'Cleaned'} {removed} tmp files")
 
     # Reached only when every step went through, so nothing is left to resume.
     if not config.dry_run:

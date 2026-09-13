@@ -67,3 +67,35 @@ def test_rebuild_switches_the_archive_to_the_new_timezone(export_dir: Path, outp
     assert load_manifest(folder)["timezone"] == "Europe/Vienna"
     assert rebuild_folder(folder) is True
     assert load_manifest(folder)["timezone"] == "Europe/Vienna"
+
+
+def _snapshot(folder: Path) -> dict:
+    return {f: (f.read_bytes(), f.stat().st_mtime_ns) for f in folder.rglob("*") if f.is_file()}
+
+
+def test_a_rebuild_dry_run_writes_nothing_and_says_so(export_dir: Path, output_dir: Path, capsys):
+    folder = organized_folder(export_dir, output_dir)
+    before = _snapshot(folder)
+    capsys.readouterr()
+
+    assert rebuild_folder(folder, timezone="Europe/Vienna", dry_run=True) is True
+
+    assert _snapshot(folder) == before
+    printed = capsys.readouterr().out
+    assert "Would write map.html" in printed
+    assert "Generated" not in printed
+
+
+def test_an_organize_dry_run_on_an_existing_archive_writes_nothing(export_dir: Path, output_dir: Path, capsys):
+    folder = organized_folder(export_dir, output_dir)
+    (folder / "2026" / "leftover.tmp.mp4").write_bytes(b"half")
+    before = _snapshot(folder)
+    capsys.readouterr()
+
+    pipeline.run_pipeline(Config(inputs=[export_dir], output=folder, yes=True, dry_run=True,
+                                 no_encode=True, no_overlay=True, resume=False))
+
+    assert _snapshot(folder) == before
+    printed = capsys.readouterr().out
+    for claim in ("Generated", "Organized", "Wrote GPS", "Removed", "Cleaned", "Set the file date"):
+        assert claim not in printed

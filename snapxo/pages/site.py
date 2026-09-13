@@ -32,7 +32,7 @@ def generate_site(
 
     if json_data:
         if generate_map_html(json_data, output_dir, file_index=file_index, dry_run=dry_run):
-            console.print("Generated map.html")
+            console.print("Would write map.html" if dry_run else "Generated map.html")
     else:
         console.print("[yellow]No JSON data available, so no chats, statistics or map[/yellow]")
 
