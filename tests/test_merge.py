@@ -174,3 +174,22 @@ def test_the_merged_archive_keeps_the_timezone_of_the_newest(tmp_path, capsys):
 
     assert load_manifest(out)["timezone"] == "Europe/Vienna"
     assert "Europe/London, Europe/Vienna" in capsys.readouterr().out
+
+
+def _set_sources(folder, sources):
+    path = folder / "_meta" / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["sources"] = sources
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_the_merged_archive_lists_the_exports_of_every_input(tmp_path):
+    a = _output_folder(tmp_path, "a", {"2026-05-01_0001.jpg": ("red", "idone")})
+    b = _output_folder(tmp_path, "b", {"2026-05-02_0001.jpg": ("blue", "idtwo")})
+    _set_sources(a, ["mydata_2025.zip", "mydata_2026.zip"])
+    _set_sources(b, ["mydata_2026.zip", "mydata_2027.zip"])
+    out = tmp_path / "merged"
+
+    merge_outputs([a, b], out)
+
+    assert load_manifest(out)["sources"] == ["mydata_2025.zip", "mydata_2026.zip", "mydata_2027.zip"]

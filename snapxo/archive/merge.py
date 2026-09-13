@@ -500,10 +500,13 @@ def merge_outputs(
         console.print(f"[yellow]The inputs use {', '.join(sorted(set(zones.values())))}, the merged "
                       f"archive takes {zone_name} from the newest.[/yellow]")
 
+    # The exports behind every input, not the input folders themselves.
+    sources = [source for input_dir in inputs for source in (load_manifest(input_dir) or {}).get("sources") or []]
+
     write_manifest(
         output, file_index,
         own_username=own_username,
-        sources=[str(p) for p in inputs],
+        sources=list(dict.fromkeys(sources)),
         timezone_name=zone_name,
         dry_run=dry_run,
     )
